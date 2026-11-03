@@ -228,14 +228,19 @@ layers; keep a short doc pointing to the new flow.
   armhf binaries and `.deb`s, and edits `/boot/config.txt` /
   `/boot/cmdline.txt` (wrong paths on trixie). The release list is fetched
   from monome's GitHub, so it can't be redirected without patching norns.
-  **Decided (Seth):** neutralise it from outside norns — the script aborts
-  with "needs new disk image" when `~/version.txt` is below `220306`, so the
-  image ships a `~/version.txt` that trips that guard (builder confirms the
-  menu still behaves sensibly; pick a better external guard if one exists).
+  **Decided (Seth):** neutralise it from outside norns. *Refined during
+  planning:* ship the release's real `~/version.txt` (e.g. `260102`) so the
+  menu reports "up to date" for stable, and make `~/update` an empty,
+  immutable (`chattr +i`) directory so the K1-alt/beta path can't download
+  or unpack anything. (The original idea — a `version.txt` below `220306` to
+  trip `update.sh`'s guard — would still download, stop audio, and show a
+  bogus version.)
   Updates are delivered by flashing new releases from the fork; an
   image-specific updater is possible later, out of scope now.
-- **maiden**: build the pinned tag from source for arm64 (no release assets
-  for 1.1.6).
+- **maiden**: build the Go binary from the pinned tag for arm64 (no release
+  assets for 1.1.6). The web app (react-scripts 1.0.17) won't build on
+  trixie's Node, so take monome's released, architecture-independent
+  `maiden/app/build` from the matching norns update tarball (sha256-pinned).
 - **SuperCollider**: prefer trixie's 3.13.0 packages; fall back to building
   the version norns expects from source only if norns' SC classes fail.
 
@@ -247,8 +252,8 @@ layers; keep a short doc pointing to the new flow.
 ### OS config modernization (from today's `setup.sh` / `config/`)
 - Boot files live in `/boot/firmware` (not `/boot`).
 - polkit `.pkla` → JS rule in `/etc/polkit-1/rules.d/`.
-- `usbmount` → udev + `systemd-mount` (or udisks2) rule for USB sticks
-  (norns SYNC menu needs auto-mount at the path norns expects — verify path).
+- `usbmount`: dropped. norns v2.9.4 has no SYNC menu, so nothing needs USB
+  auto-mount (documented as a difference from monome's images).
 - `samba` restarts via `systemctl restart smbd`; `pppd-dns`, `dphys-swapfile`,
   `triggerhappy`, `exim4`, plymouth purges become "don't install" in the
   minimal base instead of purges.
