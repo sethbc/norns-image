@@ -20,8 +20,9 @@
 #                              is architecture-independent
 #   ~/dust/{code,audio,data}   default dust; audio/common from monome's release
 # The sources stay byte-identical to the tag. Only the build is adapted:
-# CGO_ENABLED=0 (maiden has no C code), a throw-away GOPATH/GOCACHE (nothing
-# of Go is left behind) and GOTOOLCHAIN=local (use only the packaged Go).
+# CGO_ENABLED=0 (maiden has no C code), a throw-away GOPATH/GOCACHE and
+# XDG_CONFIG_HOME (Go 1.24 writes dated telemetry counters under
+# ~/.config/go; nothing of Go is left behind, and the build stays reproducible) and GOTOOLCHAIN=local (use only the packaged Go).
 # golang-go comes from the layer's package list and is purged here.
 set -euo pipefail
 
@@ -58,7 +59,8 @@ chroot "$root" setpriv --reuid=we --regid=we --init-groups \
   cd "$m/src"
   ldflags="-X github.com/monome/maiden/cmd.version=$(git describe --tags)"
   ldflags+=" -X github.com/monome/maiden/cmd.compileTime=$(date -u -d "@$(git log -1 --format=%ct)" +%Y-%m-%dT%H:%M)"
-  GOPATH=$work/gopath GOCACHE=$work/gocache GOTOOLCHAIN=local CGO_ENABLED=0 \
+  XDG_CONFIG_HOME=$work/config GOPATH=$work/gopath GOCACHE=$work/gocache \
+  GOTOOLCHAIN=local CGO_ENABLED=0 \
     go build -ldflags="$ldflags" -o "$m/maiden"
   [ -z "$(git status --porcelain --untracked-files=no)" ] || {
     echo "building changed the maiden sources" >&2
@@ -95,4 +97,4 @@ if [ -n "$go_pkgs" ]; then
   # shellcheck disable=SC2086  # one word per package
   chroot "$root" apt-get -y purge --autoremove $go_pkgs
 fi
-rm -rf "$root/root/go" "$root/root/.cache/go-build" "$root/home/we/go" "$root/home/we/.cache/go-build"
+rm -rf "$root/root/go" "$root/root/.cache/go-build" "$root/home/we/go" "$root/home/we/.cache/go-build" "$root/home/we/.config/go"

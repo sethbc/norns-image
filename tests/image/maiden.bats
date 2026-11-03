@@ -38,6 +38,8 @@ maiden_git() {
   ! in_root test -e /root/go
   ! in_root test -e /root/.cache/go-build
   ! in_root test -e /home/we/.cache/go-build
+  ! in_root test -e /home/we/.config/go
+  [ -z "$(in_root find /tmp -maxdepth 1 -name 'maiden.*')" ]
 }
 @test "dust layout" {
   for d in code audio data; do
