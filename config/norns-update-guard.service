@@ -1,0 +1,13 @@
+[Unit]
+Description=Make ~/update immutable so SYSTEM > UPDATE cannot install anything
+Before=norns.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# root-owned, so we cannot write into it even before the flag is set
+ExecStartPre=/usr/bin/mkdir -p /home/we/update
+ExecStart=/usr/bin/chattr +i /home/we/update
+
+[Install]
+WantedBy=multi-user.target

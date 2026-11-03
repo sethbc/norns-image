@@ -25,7 +25,13 @@ require_rootfs() {
 # they map back to their in-image owners (sudo, for one, insists that
 # /etc/sudoers is owned by uid 0).
 in_root() {
-  NS_SETUP='_ns_setup() { :; }' "$REPO_ROOT/vendor/rpi-image-gen/bin/ns" chroot "$ROOTFS" "$@"
+  in_ns chroot "$ROOTFS" "$@"
+}
+
+# Run a host command in that user namespace, for tools that need what the
+# built filesystem lacks (it has no /dev, so git inside it can't run).
+in_ns() {
+  NS_SETUP='_ns_setup() { :; }' "$REPO_ROOT/vendor/rpi-image-gen/bin/ns" "$@"
 }
 
 # Host path of a file inside the built filesystem.

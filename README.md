@@ -41,6 +41,29 @@ first boot the root partition grows to fill the card.
   WIFI, MODS, SETTINGS, RESTART, UPDATE), so nothing in norns needs it.
 * No rsyslog, swap file, exim, nfs-common, triggerhappy, plymouth or
   modemmanager.
+* norns is the unchanged v2.9.4 source, built for arm64 without `--release`
+  through a compiler wrapper that drops the 32-bit ARM float flags and
+  `-Werror` its build files add, and with waf 2.0.27 (the waf in the norns
+  tree needs Python < 3.11). Both live in `/usr/local/lib/norns-build`.
+  matron needs liblo 0.31 (trixie has 0.32) and libgpiod 1.x (trixie has
+  2.x): private copies live in `/opt/norns`, and libmonome, matron and crone
+  load that liblo through an rpath. GCC 14 needs two more flags; see
+  `image/layer/norns-runtime.d/build-norns.sh`. To rebuild on the device, in
+  `~/norns`:
+
+  ```
+  export PATH=/usr/local/lib/norns-build:$PATH \
+    PKG_CONFIG_PATH=/opt/norns/liblo031/lib/pkgconfig:/opt/norns/libgpiod1/lib/pkgconfig \
+    LDFLAGS=-Wl,-rpath,/opt/norns/liblo031/lib CXXFLAGS="-include string"
+  CFLAGS=$(pkg-config --cflags glib-2.0) python3 /usr/local/lib/norns-build/waf configure
+  python3 /usr/local/lib/norns-build/waf
+  ```
+* SuperCollider (3.13) comes from Debian. Its `sclang` is a Qt build, so the
+  sclang unit sets `QT_QPA_PLATFORM=offscreen`.
+* SYSTEM > UPDATE can't install anything: the monome update archives are for
+  their own images. `~/update` is a root-owned directory made immutable at
+  boot, so a download fails ("update failed."); the next key press shuts
+  down as usual. Update by flashing a newer image.
 
 ## start
 

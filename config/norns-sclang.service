@@ -6,6 +6,8 @@ Requires=norns-jack.service
 Type=simple
 User=we
 Group=we
+# Debian builds sclang with Qt; there is no display
+Environment="QT_QPA_PLATFORM=offscreen"
 LimitRTPRIO=95
 LimitMEMLOCK=infinity
 ExecStart=/home/we/norns/build/ws-wrapper/ws-wrapper ws://*:5556 /usr/bin/sclang -i maiden
