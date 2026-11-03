@@ -92,10 +92,9 @@ norns_git() {
     cmp "$f" "$ROOTFS/etc/systemd/system/${f##*/}" || return 1
   done
 }
-# Every absolute path a unit executes must exist; maiden arrives later.
+# Every absolute path a unit executes must exist.
 @test "unit executables exist" {
   for f in "$REPO_ROOT"/config/norns-*.service; do
-    [ "${f##*/}" = norns-maiden.service ] && continue
     u=$ROOTFS/etc/systemd/system/${f##*/}
     [ -f "$u" ] || { echo "${f##*/} not installed"; return 1; }
     for p in $(sed -n 's/^Exec[A-Za-z]*=[-@+!:]*//p' "$u" | tr ' ' '\n' | grep '^/'); do

@@ -26,3 +26,4 @@ layer:
   os: norns-os
   deps: norns-deps
   runtime: norns-runtime
+  maiden: norns-maiden
