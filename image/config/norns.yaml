@@ -24,3 +24,4 @@ layer:
   base: trixie-minbase
   norns: norns-base
   os: norns-os
+  deps: norns-deps
