@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Sourced by build.sh and tests. Needs an `ns` function (run a command in
 # rpi-image-gen's user namespace) defined by the caller.
 
