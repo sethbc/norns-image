@@ -57,7 +57,7 @@ if [ -n "$force_color_prompt" ]; then
 fi
 
 if [ "$color_prompt" = yes ]; then
-	IP=$(ifconfig | grep 'inet ' | tail -1 | awk '{print $2}')
+	IP=$(hostname -I | awk '{print $1}')
 	PS1='\[\033[01;32m\]$IP \[\033[01;34m\]\w \$\[\033[00m\] '
 else
     PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
