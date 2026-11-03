@@ -1,0 +1,26 @@
+# METABEGIN
+# X-Env-Layer-Name: norns-pi45
+# X-Env-Layer-Category: device
+# X-Env-Layer-Desc: Raspberry Pi 4 and Pi 5 running a norns shield. One image
+#  boots both: the generic v8 kernel (Pi 4) plus the 2712 kernel (Pi 5), with
+#  headers for both so out-of-tree modules can be built on the device.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: rpi-generic64
+# X-Env-Layer-Provides: rpi-device,hw:device:rpi:pi4,hw:device:rpi:pi5
+#
+# X-Env-VarPrefix: device
+#
+# X-Env-Var-assetdir: ${DIRECTORY}
+# X-Env-Var-assetdir-Desc: Device specific asset directory
+# X-Env-Var-assetdir-Required: n
+# X-Env-Var-assetdir-Valid: dir
+# X-Env-Var-assetdir-Set: y
+# METAEND
+---
+mmdebstrap:
+  packages:
+    # rpi-linux-2712 can't be required: it needs a bcm2712-only device, and it
+    # would force a 16K-block root filesystem the Pi 4 kernel can't mount.
+    - linux-image-rpi-2712
+    - linux-headers-rpi-v8
+    - linux-headers-rpi-2712

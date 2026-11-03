@@ -1,0 +1,17 @@
+#!/bin/sh
+# Grow the root partition, then its ext4 filesystem, to fill the boot medium.
+# rpi-image-gen images have a fixed-size root partition, and nothing in the
+# image grows it, so a card flashed with dd or Imager would otherwise keep
+# only the image's few hundred MB of free space.
+set -eu
+
+root=$(readlink -f "$(findmnt -n -o SOURCE /)")
+disk=/dev/$(lsblk -n -d -o PKNAME "$root")
+part=$(cat "/sys/class/block/${root##*/}/partition")
+
+# growpart exits 1 when the partition already fills the disk.
+rc=0
+growpart "$disk" "$part" || rc=$?
+[ "$rc" -le 1 ] || exit "$rc"
+
+resize2fs "$root"
