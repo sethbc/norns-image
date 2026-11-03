@@ -1,10 +1,12 @@
 # METABEGIN
 # X-Env-Layer-Name: norns-deps
 # X-Env-Layer-Desc: libraries norns needs that trixie lacks: libgpiod 1.x
-#  (matron uses the v1 API; trixie ships 2.x) in /opt/norns/libgpiod1, and
-#  libmonome in /usr/local, both built from pinned release tags. The build
-#  tools stay in the image (DKMS needs a compiler anyway).
-# X-Env-Layer-Version: 1.0.0
+#  (matron uses the v1 API; trixie ships 2.x) in /opt/norns/libgpiod1,
+#  liblo 0.31 (matron's lo_message typedef clashes with trixie's 0.32) in
+#  /opt/norns/liblo031, and libmonome in /usr/local linked against that
+#  liblo, all built from pinned release tags. The build tools stay in the
+#  image (DKMS needs a compiler anyway).
+# X-Env-Layer-Version: 1.1.0
 # X-Env-Layer-Requires: norns-os
 #
 # X-Env-VarPrefix: norns
@@ -16,28 +18,41 @@
 # X-Env-Var-assetdir-Valid: dir
 # X-Env-Var-assetdir-Set: y
 #
-# X-Env-Var-libgpiod1_tag: v1.6.5
-# X-Env-Var-libgpiod1_tag-Desc: libgpiod v1 release tag (versions.env).
-# X-Env-Var-libgpiod1_tag-Required: n
-# X-Env-Var-libgpiod1_tag-Valid: string
+# X-Env-Var-libgpiod1_tag:
+# X-Env-Var-libgpiod1_tag-Desc: libgpiod v1 release tag (versions.env). The
+#  pins have no defaults: build.sh passes them from versions.env.
+# X-Env-Var-libgpiod1_tag-Required: y
+# X-Env-Var-libgpiod1_tag-Valid: regex:^v1\.[0-9.]+$
 # X-Env-Var-libgpiod1_tag-Set: y
 #
-# X-Env-Var-libgpiod1_commit: 44e6985fa2afeca880607ec9238ece110164b774
+# X-Env-Var-libgpiod1_commit:
 # X-Env-Var-libgpiod1_commit-Desc: Commit the libgpiod tag must resolve to.
-# X-Env-Var-libgpiod1_commit-Required: n
-# X-Env-Var-libgpiod1_commit-Valid: string
+# X-Env-Var-libgpiod1_commit-Required: y
+# X-Env-Var-libgpiod1_commit-Valid: regex:^[0-9a-f]{40}$
 # X-Env-Var-libgpiod1_commit-Set: y
 #
-# X-Env-Var-libmonome_tag: v1.4.11
+# X-Env-Var-liblo031_tag:
+# X-Env-Var-liblo031_tag-Desc: liblo 0.31 release tag (versions.env).
+# X-Env-Var-liblo031_tag-Required: y
+# X-Env-Var-liblo031_tag-Valid: regex:^0\.31$
+# X-Env-Var-liblo031_tag-Set: y
+#
+# X-Env-Var-liblo031_commit:
+# X-Env-Var-liblo031_commit-Desc: Commit the liblo tag must resolve to.
+# X-Env-Var-liblo031_commit-Required: y
+# X-Env-Var-liblo031_commit-Valid: regex:^[0-9a-f]{40}$
+# X-Env-Var-liblo031_commit-Set: y
+#
+# X-Env-Var-libmonome_tag:
 # X-Env-Var-libmonome_tag-Desc: libmonome release tag (versions.env).
-# X-Env-Var-libmonome_tag-Required: n
-# X-Env-Var-libmonome_tag-Valid: string
+# X-Env-Var-libmonome_tag-Required: y
+# X-Env-Var-libmonome_tag-Valid: regex:^v[0-9.]+$
 # X-Env-Var-libmonome_tag-Set: y
 #
-# X-Env-Var-libmonome_commit: 9055ea22fd824839be821c10f6e9b13e9d2aa3cd
+# X-Env-Var-libmonome_commit:
 # X-Env-Var-libmonome_commit-Desc: Commit the libmonome tag must resolve to.
-# X-Env-Var-libmonome_commit-Required: n
-# X-Env-Var-libmonome_commit-Valid: string
+# X-Env-Var-libmonome_commit-Required: y
+# X-Env-Var-libmonome_commit-Valid: regex:^[0-9a-f]{40}$
 # X-Env-Var-libmonome_commit-Set: y
 # METAEND
 ---
@@ -52,9 +67,9 @@ mmdebstrap:
     - python3
     - cmake
     - libudev-dev
-    - liblo-dev
     # libmonome builds its examples, which use curses
     - libncurses-dev
   customize-hooks:
     - ${IGconf_norns_assetdir}/norns-deps.d/build-libgpiod1.sh "$1" "${IGconf_norns_libgpiod1_tag}" "${IGconf_norns_libgpiod1_commit}"
+    - ${IGconf_norns_assetdir}/norns-deps.d/build-liblo031.sh "$1" "${IGconf_norns_liblo031_tag}" "${IGconf_norns_liblo031_commit}"
     - ${IGconf_norns_assetdir}/norns-deps.d/build-libmonome.sh "$1" "${IGconf_norns_libmonome_tag}" "${IGconf_norns_libmonome_commit}"

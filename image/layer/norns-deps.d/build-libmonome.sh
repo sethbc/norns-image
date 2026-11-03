@@ -1,6 +1,10 @@
 #!/bin/bash
 # Build libmonome into /usr/local inside the root filesystem.
 # usage: build-libmonome.sh <rootfs> <tag> <commit>
+#
+# Linked against norns' private liblo 0.31 (build-liblo031.sh), with an
+# rpath, so it and matron load the same liblo. libmonome's waf finds liblo
+# with a plain compile check, so the flags come in through CFLAGS/LDFLAGS.
 set -euo pipefail
 
 root=$1
@@ -18,6 +22,8 @@ chroot "$root" /bin/bash -euo pipefail -c '
     exit 1
   }
   cd "$src"
+  lo=/opt/norns/liblo031
+  export CFLAGS="-I$lo/include" LDFLAGS="-L$lo/lib -Wl,-rpath,$lo/lib"
   python3 ./waf configure --prefix=/usr/local
   python3 ./waf
   python3 ./waf install

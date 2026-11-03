@@ -26,3 +26,19 @@ setup() {
 @test "build checkouts are not left in the image" {
   [ -z "$(ls -A "$ROOTFS/tmp")" ]
 }
+# liblo 0.31 is norns' private copy: same soname as trixie's 0.32, so it must
+# stay off the default pkg-config and loader paths.
+@test "liblo 0.31 visible through its own pkg-config path only" {
+  run in_root env PKG_CONFIG_PATH=/opt/norns/liblo031/lib/pkgconfig pkg-config --modversion liblo
+  [ "$output" = "$LIBLO031_TAG" ]
+  run in_root pkg-config --modversion liblo
+  [ "$output" != "$LIBLO031_TAG" ]
+}
+@test "liblo 0.31 is not on the loader path" {
+  ! in_root ldconfig -p | grep -q /opt/norns/liblo031
+  ! in_root grep -rqs /opt/norns/liblo031 /etc/ld.so.conf /etc/ld.so.conf.d
+}
+# libmonome's OSC support is the protocol_osc module it dlopens.
+@test "libmonome loads the private liblo 0.31" {
+  in_root ldd /usr/local/lib/monome/protocol_osc.so | grep -q 'liblo.so.7 => /opt/norns/liblo031/lib/liblo.so.7'
+}
