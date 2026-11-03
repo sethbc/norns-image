@@ -49,7 +49,7 @@ if [ "$clean" = 1 ]; then
   rm -rf -- "$OUT"
 fi
 
-version=$(git -C "$TOP" describe --tags --always --dirty)
+version=$(git -C "$TOP" describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' --always --dirty)
 name=norns-trixie-arm64-$version
 
 # Every versions.env entry reaches the layers as IGconf_norns_<lowercase name>.
@@ -59,6 +59,9 @@ while IFS='=' read -r key _; do
 done < <(grep -E '^[A-Z][A-Z0-9_]*=' "$TOP/versions.env")
 
 mkdir -p "$WORK" "$OUT"
+# shellcheck source=scripts/prune.sh
+. "$TOP/scripts/prune.sh"
+prune_stale_work "$WORK" "$version" "$name"
 # Tests read rootfs-path; never let a failed build leave a stale one behind.
 rm -f -- "$OUT/rootfs-path" "$OUT/rootfs-used-bytes"
 ig_args=(build -S "$TOP/image" -c norns.yaml -B "$WORK")
