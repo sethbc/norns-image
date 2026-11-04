@@ -118,7 +118,7 @@ kernels() { in_root ls /lib/modules; }
   c=$ROOTFS/boot/firmware/config.txt
   before=$(in_ns sha256sum "$c")
   # no I2C bus here: the probe fails, so the detector reports "no codec"
-  run in_root env NORNS_CODEC_RESET_DELAY=0 /usr/local/sbin/norns-codec-detect --reset /bin/true --probe /bin/false
+  run in_root env NORNS_CODEC_RESET_DELAY=0 NORNS_CODEC_SETTLE=0 NORNS_CODEC_BUS_WAIT=1 /usr/local/sbin/norns-codec-detect --reset /bin/true --probe /bin/false
   [ "$status" -eq 2 ]
   [ "$(in_ns sha256sum "$c")" = "$before" ]
 }
