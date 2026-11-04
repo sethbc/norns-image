@@ -1,0 +1,117 @@
+#!/bin/bash
+# Find the norns shield's codec on I2C and point config.txt's managed block
+# at the matching overlays.
+#
+# usage: norns-codec-detect [--config PATH] [--probe CMD] [--reset CMD]
+#
+#   --config  config.txt to edit (default /boot/firmware/config.txt)
+#   --probe   run as "CMD 0x48" / "CMD 0x10"; exit 0 means a device answers.
+#             Default "i2cget -f -y 1": -f because once a codec driver is
+#             bound, i2cget refuses the address without it.
+#   --reset   run as "CMD high" before probing (take the codec out of reset)
+#             and "CMD release" afterwards (give GPIO17 back). The default
+#             drives GPIO17 with pinctrl and restores the line's earlier state.
+#
+# Exit status: 0 block already correct, 10 block rewritten (reboot needed to
+# load the overlays), 2 no codec found (file untouched), 1 error.
+set -euo pipefail
+
+config=/boot/firmware/config.txt
+probe="i2cget -f -y 1"
+reset=
+gpio=17
+# The codecs need only microseconds out of reset before I2C works (CS4270
+# and CS4271 drivers wait 1 ms or less after raising the line); be generous.
+delay=${NORNS_CODEC_RESET_DELAY:-0.05}
+
+while [ $# -gt 0 ]; do
+  case $1 in
+    --config) config=${2:?--config needs a path}; shift 2 ;;
+    --probe)  probe=${2:?--probe needs a command}; shift 2 ;;
+    --reset)  reset=${2:?--reset needs a command}; shift 2 ;;
+    *) echo "usage: ${0##*/} [--config PATH] [--probe CMD] [--reset CMD]" >&2; exit 1 ;;
+  esac
+done
+
+saved=
+default_reset() {
+  case $1 in
+    high)
+      # e.g. "17: ip    pd | lo // GPIO17 = input" or "17: op dh pn | hi // ..."
+      saved=$(pinctrl get "$gpio") || return 0
+      pinctrl set "$gpio" op dh || true
+      ;;
+    release)
+      [ -n "$saved" ] || return 0
+      local -a f
+      read -ra f <<<"${saved%%|*}"
+      local fn=${f[1]:-ip} drive= pull= t
+      for t in "${f[@]:2}"; do
+        case $t in dh|dl) drive=$t ;; pu|pd|pn) pull=$t ;; esac
+      done
+      # shellcheck disable=SC2086
+      pinctrl set "$gpio" $fn $drive $pull || true
+      ;;
+  esac
+}
+do_reset() {
+  if [ -n "$reset" ]; then $reset "$1"; else default_reset "$1"; fi
+}
+
+released=
+cleanup() {
+  [ -n "$released" ] || do_reset release || true
+  [ -z "${tmp:-}" ] || rm -f -- "$tmp"
+}
+tmp=
+trap cleanup EXIT
+
+do_reset high
+sleep "$delay"
+have4270=0 have4271=0
+# shellcheck disable=SC2086
+$probe 0x48 >/dev/null 2>&1 && have4270=1
+# shellcheck disable=SC2086
+$probe 0x10 >/dev/null 2>&1 && have4271=1
+do_reset release
+released=1
+
+if [ $have4270 = 1 ] && [ $have4271 = 1 ]; then
+  echo "norns-codec-detect: both CS4270 (0x48) and CS4271 (0x10) answered; using CS4270" >&2
+fi
+if [ $have4270 = 1 ]; then codec=cs4270
+elif [ $have4271 = 1 ]; then codec=cs4271
+else
+  echo "norns-codec-detect: no codec found at 0x48 or 0x10; leaving $config alone" >&2
+  exit 2
+fi
+
+block="# BEGIN norns-codec
+[pi4]
+dtoverlay=norns-snd-$codec
+[pi5]
+dtoverlay=norns-snd-$codec-pi5
+[all]
+# END norns-codec"
+
+dir=$(dirname -- "$config")
+tmp=$(mktemp "$dir/.${config##*/}.XXXXXX")
+if grep -qx '# BEGIN norns-codec' "$config"; then
+  BLOCK=$block awk '
+    /^# BEGIN norns-codec$/ { print ENVIRON["BLOCK"]; skip = 1; next }
+    /^# END norns-codec$/   { skip = 0; next }
+    !skip
+  ' "$config" > "$tmp"
+else
+  { cat "$config"; printf '%s\n' "$block"; } > "$tmp"
+fi
+
+if cmp -s "$tmp" "$config"; then
+  exit 0
+fi
+chmod --reference="$config" "$tmp" 2>/dev/null || chmod 644 "$tmp"
+mv -f -- "$tmp" "$config"
+tmp=
+sync
+echo "norns-codec-detect: $codec found; $config updated, reboot needed" >&2
+exit 10

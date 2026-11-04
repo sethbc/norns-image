@@ -45,3 +45,8 @@ for dir in "$root"/lib/modules/*/; do
   kernels=$((kernels + 1))
 done
 [ "$kernels" -gt 0 ] || { echo "no kernels in $root/lib/modules" >&2; exit 1; }
+
+# codec detector: picks the overlays for the shield's codec on each boot
+install -D -m 755 "$repo/scripts/norns-codec-detect" "$root/usr/local/sbin/norns-codec-detect"
+install -D -m 644 "$repo/config/norns-codec-detect.service" "$root/etc/systemd/system/norns-codec-detect.service"
+chroot "$root" systemctl enable norns-codec-detect.service

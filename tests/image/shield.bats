@@ -100,3 +100,24 @@ kernels() { in_root ls /lib/modules; }
   grep -qw 'spidev.bufsiz=8192' <<<"$l"
   grep -qw 'rootwait' <<<"$l"
 }
+
+@test "codec detector enabled before jack" {
+  [ "$(in_root systemctl is-enabled norns-codec-detect.service)" = enabled ]
+  u=$ROOTFS/etc/systemd/system/norns-codec-detect.service
+  grep -q 'Before=norns-jack.service' "$u"
+  grep -q 'After=systemd-modules-load.service' "$u"
+  grep -q 'SuccessExitStatus=2 10' "$u"
+  [ -x "$ROOTFS/usr/local/sbin/norns-codec-detect" ]
+  in_root pinctrl -h >/dev/null 2>&1 || in_root test -x /usr/bin/pinctrl
+  in_root test -x /usr/bin/i2cget
+}
+
+@test "codec detector finds no shield in the build chroot and leaves config.txt alone" {
+  require_image_stage
+  c=$ROOTFS/boot/firmware/config.txt
+  before=$(in_ns sha256sum "$c")
+  # no I2C bus here: the probe fails, so the detector reports "no codec"
+  run in_root env NORNS_CODEC_RESET_DELAY=0 /usr/local/sbin/norns-codec-detect --reset /bin/true --probe /bin/false
+  [ "$status" -eq 2 ]
+  [ "$(in_ns sha256sum "$c")" = "$before" ]
+}
