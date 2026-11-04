@@ -3,6 +3,7 @@
 # at the matching overlays.
 #
 # usage: norns-codec-detect [--config PATH] [--probe CMD] [--reset CMD]
+#                           [--sysfs DIR] [--i2c-dev PATH]
 #
 #   --config  config.txt to edit (default /boot/firmware/config.txt)
 #   --probe   run as "CMD 0x48" / "CMD 0x10"; exit 0 means a device answers.
@@ -12,6 +13,14 @@
 #             and "CMD release" afterwards (give GPIO17 back). The default
 #             drives GPIO17 with pinctrl and restores the line's earlier state.
 #
+#   --sysfs   I2C device directory (default /sys/bus/i2c/devices). A codec with
+#             a bound driver (1-0048 or 1-0010 has a "driver" link) is present
+#             by definition: then neither GPIO17 nor I2C is touched, since the
+#             driver owns both.
+#   --i2c-dev I2C character device to wait for (default /dev/i2c-1; i2c-dev
+#             and the adapter module load asynchronously at boot). Waits up to
+#             NORNS_CODEC_BUS_WAIT seconds (default 10), then exits 2.
+#
 # Exit status: 0 block already correct, 10 block rewritten (reboot needed to
 # load the overlays), 2 no codec found (file untouched), 1 error.
 set -euo pipefail
@@ -20,6 +29,9 @@ config=/boot/firmware/config.txt
 probe="i2cget -f -y 1"
 reset=
 gpio=17
+sysfs=/sys/bus/i2c/devices
+i2cdev=/dev/i2c-1
+buswait=${NORNS_CODEC_BUS_WAIT:-10}
 # The codecs need only microseconds out of reset before I2C works (CS4270
 # and CS4271 drivers wait 1 ms or less after raising the line); be generous.
 delay=${NORNS_CODEC_RESET_DELAY:-0.05}
@@ -29,20 +41,28 @@ while [ $# -gt 0 ]; do
     --config) config=${2:?--config needs a path}; shift 2 ;;
     --probe)  probe=${2:?--probe needs a command}; shift 2 ;;
     --reset)  reset=${2:?--reset needs a command}; shift 2 ;;
-    *) echo "usage: ${0##*/} [--config PATH] [--probe CMD] [--reset CMD]" >&2; exit 1 ;;
+    --sysfs)  sysfs=${2:?--sysfs needs a directory}; shift 2 ;;
+    --i2c-dev) i2cdev=${2:?--i2c-dev needs a path}; shift 2 ;;
+    *) echo "usage: ${0##*/} [--config PATH] [--probe CMD] [--reset CMD] [--sysfs DIR] [--i2c-dev PATH]" >&2; exit 1 ;;
   esac
 done
 
 saved=
+skip_gpio=
 default_reset() {
   case $1 in
     high)
       # e.g. "17: ip    pd | lo // GPIO17 = input" or "17: op dh pn | hi // ..."
       saved=$(pinctrl get "$gpio") || return 0
+      # already driven high (a codec driver has the line): leave it alone
+      if [[ ${saved%%|*} =~ [[:space:]]op[[:space:]]+dh([[:space:]]|$) ]]; then
+        skip_gpio=1
+        return 0
+      fi
       pinctrl set "$gpio" op dh || true
       ;;
     release)
-      [ -n "$saved" ] || return 0
+      [ -n "$saved" ] && [ -z "$skip_gpio" ] || return 0
       local -a f
       read -ra f <<<"${saved%%|*}"
       local fn=${f[1]:-ip} drive= pull= t
@@ -58,7 +78,7 @@ do_reset() {
   if [ -n "$reset" ]; then $reset "$1"; else default_reset "$1"; fi
 }
 
-released=
+released=1   # nothing to give back until the line is taken
 cleanup() {
   [ -n "$released" ] || do_reset release || true
   [ -z "${tmp:-}" ] || rm -f -- "$tmp"
@@ -66,15 +86,36 @@ cleanup() {
 tmp=
 trap cleanup EXIT
 
-do_reset high
-sleep "$delay"
+# let udev finish loading i2c-dev, the adapter and any codec driver
+if [ "${NORNS_CODEC_SETTLE:-1}" != 0 ] && command -v udevadm >/dev/null; then
+  udevadm settle --timeout=10 || true
+fi
+
 have4270=0 have4271=0
-# shellcheck disable=SC2086
-$probe 0x48 >/dev/null 2>&1 && have4270=1
-# shellcheck disable=SC2086
-$probe 0x10 >/dev/null 2>&1 && have4271=1
-do_reset release
-released=1
+[ -e "$sysfs/1-0048/driver" ] && have4270=1
+[ -e "$sysfs/1-0010/driver" ] && have4271=1
+
+if [ $have4270 = 0 ] && [ $have4271 = 0 ]; then
+  # no driver bound: ask the bus, with the codec out of reset
+  waited=0
+  while [ ! -e "$i2cdev" ]; do
+    if [ "$waited" -ge $((buswait * 5)) ]; then
+      echo "norns-codec-detect: $i2cdev did not appear in ${buswait}s; leaving $config alone" >&2
+      exit 2
+    fi
+    sleep 0.2
+    waited=$((waited + 1))
+  done
+  released=
+  do_reset high
+  sleep "$delay"
+  # shellcheck disable=SC2086
+  $probe 0x48 >/dev/null 2>&1 && have4270=1
+  # shellcheck disable=SC2086
+  $probe 0x10 >/dev/null 2>&1 && have4271=1
+  do_reset release
+  released=1
+fi
 
 if [ $have4270 = 1 ] && [ $have4271 = 1 ]; then
   echo "norns-codec-detect: both CS4270 (0x48) and CS4271 (0x10) answered; using CS4270" >&2

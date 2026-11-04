@@ -50,3 +50,6 @@ done
 install -D -m 755 "$repo/scripts/norns-codec-detect" "$root/usr/local/sbin/norns-codec-detect"
 install -D -m 644 "$repo/config/norns-codec-detect.service" "$root/etc/systemd/system/norns-codec-detect.service"
 chroot "$root" systemctl enable norns-codec-detect.service
+
+# /dev/i2c-1 for the detector and matron (i2c-dev is a module on this kernel)
+install -D -m 644 "$repo/config/norns-i2c.conf" "$root/etc/modules-load.d/norns-i2c.conf"

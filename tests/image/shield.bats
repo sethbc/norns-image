@@ -110,6 +110,7 @@ kernels() { in_root ls /lib/modules; }
   [ -x "$ROOTFS/usr/local/sbin/norns-codec-detect" ]
   [ -x "$ROOTFS/usr/bin/pinctrl" ]
   [ -x "$ROOTFS/usr/sbin/i2cget" ]
+  grep -qx i2c-dev "$ROOTFS/etc/modules-load.d/norns-i2c.conf"
 }
 
 @test "codec detector finds no shield in the build chroot and leaves config.txt alone" {

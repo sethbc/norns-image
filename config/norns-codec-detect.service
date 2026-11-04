@@ -1,7 +1,7 @@
 [Unit]
 Description=Detect the norns shield codec (CS4270 or CS4271) and select its overlays
 DefaultDependencies=yes
-After=systemd-modules-load.service
+After=systemd-modules-load.service systemd-udev-trigger.service
 Before=norns-jack.service
 
 [Service]

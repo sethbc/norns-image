@@ -34,13 +34,15 @@ SH
 echo "reset $1" >> "$LOG"
 SH
   chmod +x "$FAKEPROBE" "$FAKERESET"
-  export NORNS_CODEC_RESET_DELAY=0
+  export NORNS_CODEC_RESET_DELAY=0 NORNS_CODEC_SETTLE=0 NORNS_CODEC_BUS_WAIT=1
+  SYS=$W/sys; mkdir "$SYS"
+  I2CDEV=$W/i2c-1; : > "$I2CDEV"
 }
 
 teardown() { rm -rf "$W"; }
 
 detect() {
-  "$REPO_ROOT/scripts/norns-codec-detect" --config "$CFG" --probe "$FAKEPROBE" --reset "$FAKERESET"
+  "$REPO_ROOT/scripts/norns-codec-detect" --config "$CFG" --probe "$FAKEPROBE" --reset "$FAKERESET" --sysfs "$SYS" --i2c-dev "$I2CDEV"
 }
 block_has() { sed -n '/^# BEGIN norns-codec$/,/^# END norns-codec$/p' "$CFG" | grep -qxF "$1"; }
 outside_block() { sed '/^# BEGIN norns-codec$/,/^# END norns-codec$/d' "$1"; }
@@ -121,8 +123,57 @@ echo "pinctrl $*" >> "$LOG"
 exit 0
 SH
   chmod +x "$W/bin/pinctrl"
-  FAKE_I2C= PATH=$W/bin:$PATH run "$REPO_ROOT/scripts/norns-codec-detect" --config "$CFG" --probe "$FAKEPROBE"
+  FAKE_I2C= PATH=$W/bin:$PATH run "$REPO_ROOT/scripts/norns-codec-detect" --config "$CFG" --probe "$FAKEPROBE" --sysfs "$SYS" --i2c-dev "$I2CDEV"
   [ "$status" -eq 2 ]
   grep -qx 'pinctrl set 17 op dh' "$LOG"
   [ "$(tail -n1 "$LOG")" = "pinctrl set 17 ip pd" ]
+}
+@test "bus that never appears: exit 2, file untouched, GPIO17 never taken" {
+  rm "$I2CDEV"
+  before=$(sha256sum "$CFG")
+  FAKE_I2C=0x48 run detect
+  [ "$status" -eq 2 ]
+  [ "$(sha256sum "$CFG")" = "$before" ]
+  [[ "$output" == *"did not appear"* ]]
+  [ "$(grep -c '^reset high' "$LOG")" -eq "$(grep -c '^reset release' "$LOG")" ]
+  ! grep -q '^probe' "$LOG"
+}
+@test "bus that appears late is waited for" {
+  rm "$I2CDEV"
+  ( sleep 0.5; : > "$I2CDEV" ) &
+  FAKE_I2C=0x48 run detect
+  [ "$status" -eq 10 ]
+}
+@test "bound codec driver: present, no GPIO17, no I2C" {
+  mkdir -p "$SYS/1-0010"; ln -s /nonexistent "$SYS/1-0010/driver"
+  # the link dangles in the fixture; -e would miss it
+  rm "$SYS/1-0010/driver"; mkdir "$SYS/1-0010/driver"
+  FAKE_I2C= run detect
+  [ "$status" -eq 10 ]
+  block_has dtoverlay=norns-snd-cs4271
+  [ ! -s "$LOG" ]
+  FAKE_I2C= run detect
+  [ "$status" -eq 0 ]
+  [ ! -s "$LOG" ]
+}
+@test "bound cs4270 driver with correct block: exit 0 even without a bus" {
+  FAKE_I2C=0x48 detect || true
+  rm "$I2CDEV"; : > "$LOG"
+  mkdir -p "$SYS/1-0048/driver"
+  FAKE_I2C= run detect
+  [ "$status" -eq 0 ]
+  [ ! -s "$LOG" ]
+}
+@test "default reset leaves GPIO17 alone when it is already driven high" {
+  mkdir "$W/bin"
+  cat > "$W/bin/pinctrl" <<'SH'
+#!/bin/bash
+echo "pinctrl $*" >> "$LOG"
+[ "$1" = get ] && echo "17: op dh pn | hi // GPIO17 = output"
+exit 0
+SH
+  chmod +x "$W/bin/pinctrl"
+  FAKE_I2C=0x48 PATH=$W/bin:$PATH run "$REPO_ROOT/scripts/norns-codec-detect" --config "$CFG" --probe "$FAKEPROBE" --sysfs "$SYS" --i2c-dev "$I2CDEV"
+  [ "$status" -eq 10 ]
+  ! grep -q 'pinctrl set' "$LOG"
 }
