@@ -25,3 +25,20 @@ teardown() { rm -rf "$W"; }
   rm -rf "$W"/*
   prune_stale_work "$W" abc n-abc
 }
+
+@test "prune_stale_out keeps only this build's image files" {
+  O=$(mktemp -d)
+  touch "$O"/n-abc.img.zst "$O"/n-abc.img.zst.sha256 "$O"/n-abc.sbom.zst "$O"/n-abc.manifest.zst \
+        "$O"/n-old.img.zst "$O"/n-old.img.zst.sha256 "$O"/n-old.sbom.zst "$O"/n-old.manifest.zst \
+        "$O"/n-abc-dirty.img.zst "$O"/rootfs-path "$O"/other.txt
+  prune_stale_out "$O" n- n-abc
+  [ "$(cd "$O" && LC_ALL=C ls | tr '\n' ' ')" = "n-abc.img.zst n-abc.img.zst.sha256 n-abc.manifest.zst n-abc.sbom.zst other.txt rootfs-path " ]
+  rm -rf "$O"
+}
+
+@test "prune_stale_out is a no-op on an empty out dir" {
+  O=$(mktemp -d)
+  prune_stale_out "$O" n- n-abc
+  [ -z "$(ls -A "$O")" ]
+  rm -rf "$O"
+}

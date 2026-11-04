@@ -16,3 +16,19 @@ prune_stale_work() {
     ns rm -rf -- "$d"
   done
 }
+
+# prune_stale_out OUT PREFIX IMAGE_NAME
+# Remove PREFIX* files under OUT that are not IMAGE_NAME.*: the images,
+# checksums, SBOMs and manifests of earlier builds, so OUT holds this build's
+# files only. Other files (rootfs-path and friends) are left alone.
+prune_stale_out() {
+  local out=$1 prefix=$2 name=$3 f
+  for f in "$out/$prefix"*; do
+    [ -f "$f" ] || continue
+    case ${f##*/} in
+      "$name".*) continue ;;
+    esac
+    echo "pruning stale $f"
+    rm -f -- "$f"
+  done
+}
