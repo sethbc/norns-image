@@ -1,7 +1,8 @@
 [Unit]
 Description=Write boot diagnostics to /boot/firmware/norns-boot.log
 # Once the boot is done, and again from norns-bootlog.timer when the norns
-# services have had time to start (or fail).
+# services have had time to start (or fail). norns-bootlog-early.service
+# writes the first one of each boot.
 After=multi-user.target
 RequiresMountsFor=/boot/firmware
 

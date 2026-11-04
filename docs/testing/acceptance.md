@@ -17,11 +17,17 @@ to do.
 Every boot writes a diagnostics dump to the boot partition, so it can be read
 without a screen or network: power off, put the SD card in your computer,
 open the boot volume (`bootfs`) and read `norns-boot.log` (the previous
-boot's is `norns-boot.prev.log`). It is written once the boot is done and
-again 90 s after boot, and holds failed units, the norns, ssh and first-boot
-units' status, this boot's warnings, the network addresses and listening
-ports, the device nodes, the sound cards and the codec block of
-`config.txt`. Attach it to any failure report.
+boot's is `norns-boot.prev.log`). It is written early in the boot (right
+after the filesystems are mounted), again when the boot is done and again
+90 s after boot, so a boot that hangs part way still leaves the early one.
+`norns-boot-count` next to it counts the boots: if it climbs on its own, the
+norns is rebooting in a loop. The log holds the boot count and the last few
+boots (`journalctl --list-boots`), failed units, the norns, ssh and
+first-boot units' status, this boot's warnings, the network addresses and
+listening ports, the device nodes, the sound cards and the codec block of
+`config.txt`. The journal itself is kept on the card, so after a hang or a
+crash `journalctl -b -1` on the next boot shows the boot that failed. Attach
+the log to any failure report.
 
 ## A. Pi 4 + shieldXL (the target)
 

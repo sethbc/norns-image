@@ -17,7 +17,7 @@ bootlog() { "$REPO_ROOT/scripts/norns-bootlog" --dir "$D" --state "$STATE"; }
   run bootlog
   [ "$status" -eq 0 ]
   l=$D/norns-boot.log
-  for s in 'uname -a' 'systemctl --failed' 'systemctl status' 'journalctl -b -p warning' \
+  for s in 'uname -a' 'journalctl --list-boots' 'systemctl --failed' 'systemctl status' 'journalctl -b -p warning' \
            'journalctl -b -1' 'ip -brief addr' 'ss -tlnp' 'device nodes' 'aplay -l' \
            'lsmod' 'df -h /' 'config.txt from # BEGIN norns-codec'; do
     grep -q "^===== $s" "$l" || { echo "missing: $s"; return 1; }
@@ -50,4 +50,16 @@ bootlog() { "$REPO_ROOT/scripts/norns-bootlog" --dir "$D" --state "$STATE"; }
   PATH=$W/bin:$PATH run bootlog
   [ "$status" -eq 0 ]
   grep -q '(exit 3)' "$D/norns-boot.log"
+}
+@test "counts boots: once per boot, from a missing or garbled counter" {
+  bootlog
+  [ "$(cat "$D/norns-boot-count")" = 1 ]
+  bootlog                                  # same boot
+  [ "$(cat "$D/norns-boot-count")" = 1 ]
+  grep -qx 'boot count 1' "$D/norns-boot.log"
+  rm "$STATE"; bootlog                     # next boot
+  [ "$(cat "$D/norns-boot-count")" = 2 ]
+  echo garbage > "$D/norns-boot-count"; rm "$STATE"; bootlog
+  [ "$(cat "$D/norns-boot-count")" = 1 ]
+  [ -z "$(ls -A "$D" | grep '^\.norns-boot')" ]
 }

@@ -1,0 +1,19 @@
+[Unit]
+Description=Write early boot diagnostics to /boot/firmware/norns-boot.log
+# As soon as the boot partition is mounted, before networking and the norns
+# services: if the boot hangs later, this log (or, after the next boot,
+# norns-boot.prev.log) shows how far it got.
+DefaultDependencies=no
+After=local-fs.target systemd-journald.service
+RequiresMountsFor=/boot/firmware
+Conflicts=shutdown.target
+Before=shutdown.target
+
+[Service]
+Type=oneshot
+# never fails the boot: the script always exits 0, and "-" ignores anything else
+ExecStart=-/usr/local/sbin/norns-bootlog
+TimeoutStartSec=5min
+
+[Install]
+WantedBy=sysinit.target

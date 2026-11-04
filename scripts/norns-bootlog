@@ -2,14 +2,19 @@
 # Write a diagnostics dump of this boot to the FAT boot partition, where it
 # can be read by putting the SD card in any computer (no screen or network
 # needed): /boot/firmware/norns-boot.log. The previous boot's dump is kept as
-# norns-boot.prev.log.
+# norns-boot.prev.log, and norns-boot-count counts the boots.
+#
+# It runs early (norns-bootlog-early.service, right after local-fs), so a boot
+# that hangs later still leaves its log, and again at the end of the boot and
+# 90 s after it (norns-bootlog.service and .timer).
 #
 # usage: norns-bootlog [--dir DIR] [--state FILE]
 #   --dir    where the logs go (default /boot/firmware)
-#   --state  marker that this boot's first run has rotated the logs (default
-#            /run/norns-bootlog.rotated; /run is empty on every boot). Later
-#            runs in the same boot overwrite norns-boot.log only, so
-#            norns-boot.prev.log stays the previous boot's.
+#   --state  marker that this boot's first run has counted the boot and
+#            rotated the logs (default /run/norns-bootlog.rotated; /run is
+#            empty on every boot). Later runs in the same boot overwrite
+#            norns-boot.log only, so norns-boot.prev.log stays the previous
+#            boot's.
 #
 # The dump is capped at NORNS_BOOTLOG_MAX bytes (default 1048576). Every
 # command is best effort and time-limited; the script always exits 0, so it
@@ -30,6 +35,7 @@ done
 
 log=$dir/norns-boot.log
 prev=$dir/norns-boot.prev.log
+countf=$dir/norns-boot-count
 
 UNITS="ssh ssh-hostkeys-generate norns-grow-root norns-codec-detect
   norns-update-guard norns-jack norns-crone norns-sclang norns-matron
@@ -45,8 +51,10 @@ section() {
 
 dump() {
   printf 'norns boot log, written %s\n' "$(date -Is 2>/dev/null || date)"
+  printf 'boot count %s\n' "$(cat "$countf" 2>/dev/null)"
   section 'uname -a' 'uname -a'
   section 'uptime' 'uptime'
+  section 'journalctl --list-boots (last 5)' 'journalctl --list-boots --no-pager | tail -n 5'
   section 'systemctl --failed' 'systemctl --failed --no-pager'
   # shellcheck disable=SC2086
   section 'systemctl status (norns, ssh, first-boot units)' \
@@ -66,15 +74,22 @@ dump() {
 }
 
 [ -d "$dir" ] || { echo "norns-bootlog: no $dir" >&2; exit 0; }
-tmp=$(mktemp "$dir/.norns-boot.log.XXXXXX") || exit 0
-trap 'rm -f -- "$tmp"' EXIT
+tmp=
+trap '[ -z "$tmp" ] || rm -f -- "$tmp"' EXIT
 
-dump | head -c "$max" > "$tmp"
-
+# First run of this boot: count it, and keep the previous boot's log.
 if [ ! -e "$state" ]; then
+  n=$(cat "$countf" 2>/dev/null)
+  case $n in ''|*[!0-9]*) n=0 ;; esac
+  tmp=$(mktemp "$dir/.norns-boot-count.XXXXXX") \
+    && echo $((n + 1)) > "$tmp" && mv -f -- "$tmp" "$countf" && tmp=
   [ -e "$log" ] && mv -f -- "$log" "$prev"
   : > "$state" 2>/dev/null
+  sync
 fi
-mv -f -- "$tmp" "$log" && trap - EXIT
+
+tmp=$(mktemp "$dir/.norns-boot.log.XXXXXX") || exit 0
+dump | head -c "$max" > "$tmp"
+mv -f -- "$tmp" "$log" && tmp=
 sync
 exit 0

@@ -88,6 +88,8 @@ setup() {
   cmp "$REPO_ROOT/config/journald.conf" "$j"
   grep -qx '\[Journal\]' "$j"
   grep -qx 'Storage=persistent' "$j"
+  # on disk within 15 s, so a crash or hang loses little of -b -1
+  grep -qx 'SyncIntervalSec=15s' "$j"
   grep -qx 'SystemMaxUse=50M' "$j"
   # a single file would keep only the current one: no SystemMaxFiles=1
   ! grep -q '^SystemMaxFiles=' "$j" || false

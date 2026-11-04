@@ -155,11 +155,21 @@ norns_git() {
 @test "boot diagnostics are written to the boot partition every boot" {
   cmp "$REPO_ROOT/scripts/norns-bootlog" "$ROOTFS/usr/local/sbin/norns-bootlog"
   in_root test -x /usr/local/sbin/norns-bootlog
-  [ "$(in_root systemctl is-enabled norns-bootlog.service)" = enabled ]
-  [ "$(in_root systemctl is-enabled norns-bootlog.timer)" = enabled ]
-  u=$ROOTFS/etc/systemd/system/norns-bootlog.service
-  grep -qx 'ExecStart=-/usr/local/sbin/norns-bootlog' "$u"
-  grep -qx 'RequiresMountsFor=/boot/firmware' "$u"
+  for u in norns-bootlog-early.service norns-bootlog.service norns-bootlog.timer; do
+    [ "$(in_root systemctl is-enabled $u)" = enabled ] || { echo "$u not enabled"; return 1; }
+  done
+  for u in norns-bootlog-early norns-bootlog; do
+    f=$ROOTFS/etc/systemd/system/$u.service
+    grep -qx 'ExecStart=-/usr/local/sbin/norns-bootlog' "$f"
+    grep -qx 'RequiresMountsFor=/boot/firmware' "$f"
+  done
+  # early: right after the local filesystems, before networking and norns, so
+  # a boot that hangs later still leaves a log
+  e=$ROOTFS/etc/systemd/system/norns-bootlog-early.service
+  grep -qx 'DefaultDependencies=no' "$e"
+  grep -qx 'After=local-fs.target systemd-journald.service' "$e"
+  grep -qx 'WantedBy=sysinit.target' "$e"
+  grep -qx 'After=multi-user.target' "$ROOTFS/etc/systemd/system/norns-bootlog.service"
   grep -qx 'OnBootSec=90s' "$ROOTFS/etc/systemd/system/norns-bootlog.timer"
   grep -qx 'dir=/boot/firmware' "$ROOTFS/usr/local/sbin/norns-bootlog"
   # /boot/firmware is the FAT partition in the image's fstab
