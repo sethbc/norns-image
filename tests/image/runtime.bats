@@ -97,7 +97,8 @@ norns_git() {
   for f in "$REPO_ROOT"/config/norns-*.service; do
     u=$ROOTFS/etc/systemd/system/${f##*/}
     [ -f "$u" ] || { echo "${f##*/} not installed"; return 1; }
-    for p in $(sed -n 's/^Exec[A-Za-z]*=[-@+!:]*//p' "$u" | tr ' ' '\n' | grep '^/'); do
+    # /proc, /sys, /dev and /run paths exist only on the running system
+    for p in $(sed -n 's/^Exec[A-Za-z]*=[-@+!:]*//p' "$u" | tr ' ' '\n' | grep '^/' | grep -Ev '^/(proc|sys|dev|run)/'); do
       in_root test -e "$p" || { echo "${f##*/}: $p"; return 1; }
     done
   done
@@ -128,6 +129,26 @@ norns_git() {
   done
   # syntax, and the group names resolve in the image
   in_root udevadm verify "$r"
+}
+# The codec is a module udev loads, so the card can appear after JACK's
+# ordering dependencies are done; jackd would fail on a missing hw:sndrpimonome
+# and take crone and sclang (Requires=norns-jack) down with it. The start job
+# waits for the card instead, so they start after it as usual.
+@test "jack waits for the sound card before starting" {
+  u=$ROOTFS/etc/systemd/system/norns-jack.service
+  grep -qx 'ExecStart=/usr/bin/jackd -R -P 95 -d alsa -d hw:sndrpimonome -r 48000 -n 3 -p 128 -S -s' "$u"
+  # the shell snippet, unescaped as systemd runs it ($$ is $)
+  wait=$(sed -n "s|^ExecStartPre=/bin/sh -c '\(.*\)'\$|\1|p" "$u" | sed 's/\$\$/$/g')
+  [[ "$wait" == *"/proc/asound/sndrpimonome"* ]]
+  # 50 x 0.2 s: gives up (and fails the start) after about 10 s
+  [[ "$wait" == *'$(seq 50)'* ]]
+  [[ "$wait" == *"sleep 0.2"* ]]
+  [[ "$wait" == *"exit 1" ]]
+  # it returns as soon as the card is there
+  d=$BATS_TEST_TMPDIR/proc/asound
+  mkdir -p "$d/sndrpimonome"
+  run timeout 5 sh -c "${wait//\/proc\/asound/$d}"
+  [ "$status" -eq 0 ]
 }
 # SYSTEM > UPDATE: ~/version.txt makes stable report "up to date"; for a
 # beta (K1-alt) install the download into ~/update fails, as that is a

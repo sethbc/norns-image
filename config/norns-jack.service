@@ -8,6 +8,10 @@ Group=we
 Environment="JACK_NO_AUDIO_RESERVATION=1"
 LimitRTPRIO=95
 LimitMEMLOCK=infinity
+# The codec module is loaded by udev, so the card can turn up after this unit's
+# ordering dependencies; wait up to 10 s for it rather than fail (and take
+# crone and sclang, which Require this unit, down with it).
+ExecStartPre=/bin/sh -c 'for i in $$(seq 50); do [ -e /proc/asound/sndrpimonome ] && exit 0; sleep 0.2; done; echo "no sound card sndrpimonome after 10 s" >&2; exit 1'
 ExecStart=/usr/bin/jackd -R -P 95 -d alsa -d hw:sndrpimonome -r 48000 -n 3 -p 128 -S -s
 ExecStartPost=/usr/bin/jack_wait -w -t 10
 TimeoutStopSec=1
