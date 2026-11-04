@@ -22,7 +22,9 @@
 #             NORNS_CODEC_BUS_WAIT seconds (default 10), then exits 2.
 #
 # Exit status: 0 block already correct, 10 block rewritten (reboot needed to
-# load the overlays), 2 no codec found (file untouched), 1 error.
+# load the overlays), 2 no codec found (file untouched), 1 error (including a
+# malformed block: BEGIN without END, END first, or more than one block; the
+# file is left untouched).
 set -euo pipefail
 
 config=/boot/firmware/config.txt
@@ -46,6 +48,19 @@ while [ $# -gt 0 ]; do
     *) echo "usage: ${0##*/} [--config PATH] [--probe CMD] [--reset CMD] [--sysfs DIR] [--i2c-dev PATH]" >&2; exit 1 ;;
   esac
 done
+
+# The managed block must be absent (it is appended) or exactly one BEGIN line
+# followed by one END line. Anything else is left for a person to fix:
+# rewriting it would drop or duplicate the lines around it.
+[ -r "$config" ] || { echo "norns-codec-detect: cannot read $config" >&2; exit 1; }
+markers=$(awk '/^# BEGIN norns-codec$/ { printf "B" } /^# END norns-codec$/ { printf "E" }' "$config")
+case $markers in
+  ''|BE) ;;
+  *)
+    echo "norns-codec-detect: $config has a malformed norns-codec block (want one '# BEGIN norns-codec' line, then one '# END norns-codec' line); leaving it alone" >&2
+    exit 1
+    ;;
+esac
 
 saved=
 skip_gpio=
@@ -137,7 +152,7 @@ dtoverlay=norns-snd-$codec-pi5
 
 dir=$(dirname -- "$config")
 tmp=$(mktemp "$dir/.${config##*/}.XXXXXX")
-if grep -qx '# BEGIN norns-codec' "$config"; then
+if [ "$markers" = BE ]; then
   BLOCK=$block awk '
     /^# BEGIN norns-codec$/ { print ENVIRON["BLOCK"]; skip = 1; next }
     /^# END norns-codec$/   { skip = 0; next }
