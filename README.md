@@ -4,6 +4,18 @@ Builds the norns disk image: Raspberry Pi OS (Debian trixie, arm64) for
 monome norns shields on Raspberry Pi 4 and 5, using
 [rpi-image-gen](https://github.com/raspberrypi/rpi-image-gen).
 
+## Supported hardware
+
+| Hardware | Status |
+|---|---|
+| Raspberry Pi 4 + stock norns shield or shieldXL (CS4270) | Supported: phase 1, this image |
+| Raspberry Pi 5 + shield | Boots to a shell; shield audio and controls pending |
+| shieldXL UART MIDI | Later phase |
+| CS4271 shields (211028 and later) | Detected, not yet tested on hardware |
+| CM3 norns, PiSugar | Later phases |
+
+What to check after flashing an image: [docs/testing/acceptance.md](docs/testing/acceptance.md).
+
 ## Building
 
 ```
