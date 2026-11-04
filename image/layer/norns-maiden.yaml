@@ -1,0 +1,61 @@
+# METABEGIN
+# X-Env-Layer-Name: norns-maiden
+# X-Env-Layer-Desc: maiden, norns' web editor: monome/maiden built unchanged
+#  from the pinned release tag (Go, purged afterwards) in /home/we/maiden with
+#  monome's released web app, and the default dust directory with the common
+#  audio samples.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: norns-runtime
+#
+# X-Env-VarPrefix: norns
+#
+# X-Env-Var-assetdir: ${DIRECTORY}
+# X-Env-Var-assetdir-Desc: Directory holding the norns layers and their
+#  <layer>.d/ asset directories.
+# X-Env-Var-assetdir-Required: n
+# X-Env-Var-assetdir-Valid: dir
+# X-Env-Var-assetdir-Set: y
+#
+# X-Env-Var-maiden_tag:
+# X-Env-Var-maiden_tag-Desc: maiden release tag (versions.env MAIDEN_TAG). The pins have no defaults: build.sh passes them from versions.env.
+# X-Env-Var-maiden_tag-Required: y
+# X-Env-Var-maiden_tag-Valid: regex:^v[0-9]+\.[0-9]+\.[0-9]+$
+# X-Env-Var-maiden_tag-Set: y
+#
+# X-Env-Var-maiden_commit:
+# X-Env-Var-maiden_commit-Desc: Commit the maiden tag must resolve to (versions.env MAIDEN_COMMIT).
+# X-Env-Var-maiden_commit-Required: y
+# X-Env-Var-maiden_commit-Valid: regex:^[0-9a-f]{40}$
+# X-Env-Var-maiden_commit-Set: y
+#
+# X-Env-Var-norns_update_url:
+# X-Env-Var-norns_update_url-Desc: norns release tarball the web app is taken from (versions.env NORNS_UPDATE_URL).
+# X-Env-Var-norns_update_url-Required: y
+# X-Env-Var-norns_update_url-Valid: regex:^https://[^ ]+$
+# X-Env-Var-norns_update_url-Set: y
+#
+# X-Env-Var-norns_update_sha256:
+# X-Env-Var-norns_update_sha256-Desc: sha256 of that tarball (versions.env NORNS_UPDATE_SHA256).
+# X-Env-Var-norns_update_sha256-Required: y
+# X-Env-Var-norns_update_sha256-Valid: regex:^[0-9a-f]{64}$
+# X-Env-Var-norns_update_sha256-Set: y
+#
+# X-Env-Var-dust_audio_common_url:
+# X-Env-Var-dust_audio_common_url-Desc: dust audio samples tarball (versions.env DUST_AUDIO_COMMON_URL).
+# X-Env-Var-dust_audio_common_url-Required: y
+# X-Env-Var-dust_audio_common_url-Valid: regex:^https://[^ ]+$
+# X-Env-Var-dust_audio_common_url-Set: y
+#
+# X-Env-Var-dust_audio_common_sha256:
+# X-Env-Var-dust_audio_common_sha256-Desc: sha256 of that tarball (versions.env DUST_AUDIO_COMMON_SHA256).
+# X-Env-Var-dust_audio_common_sha256-Required: y
+# X-Env-Var-dust_audio_common_sha256-Valid: regex:^[0-9a-f]{64}$
+# X-Env-Var-dust_audio_common_sha256-Set: y
+# METAEND
+---
+mmdebstrap:
+  packages:
+    # build tool only; install-maiden.sh purges it again
+    - golang-go
+  customize-hooks:
+    - ${IGconf_norns_assetdir}/norns-maiden.d/install-maiden.sh "$1" "${IGconf_norns_maiden_tag}" "${IGconf_norns_maiden_commit}" "${IGconf_norns_norns_update_url}" "${IGconf_norns_norns_update_sha256}" "${IGconf_norns_norns_version_txt}" "${IGconf_norns_dust_audio_common_url}" "${IGconf_norns_dust_audio_common_sha256}"

@@ -1,0 +1,13 @@
+[Unit]
+Description=Grow the root partition and filesystem to fill the SD card
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/norns-grow-root
+# Run once: a successful grow disables the unit; a failure retries next boot.
+ExecStartPost=/usr/bin/systemctl disable %n
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

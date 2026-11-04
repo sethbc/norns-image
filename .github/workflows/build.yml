@@ -1,0 +1,86 @@
+name: build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0   # tags, for git describe
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo vendor/rpi-image-gen/install_deps.sh
+          sudo apt-get install -y bats uidmap podman device-tree-compiler
+
+      - name: Ensure subordinate uid/gid range for the runner user
+        run: |
+          user=$(id -un)
+          grep -q "^$user:" /etc/subuid || echo "$user:100000:65536" | sudo tee -a /etc/subuid
+          grep -q "^$user:" /etc/subgid || echo "$user:100000:65536" | sudo tee -a /etc/subgid
+          grep "^$user:" /etc/subuid /etc/subgid
+
+      - name: Build image
+        run: ./build.sh
+
+      - name: Test
+        run: tests/run.sh all
+
+      - name: Summary
+        run: |
+          {
+            echo "### Image build"
+            echo "- rootfs used bytes: $(cat out/rootfs-used-bytes)"
+            echo '```'
+            ls -l out
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: norns-image
+          path: |
+            out/*.img.zst
+            out/*.sha256
+            out/*.sbom*
+            out/*.manifest*
+            out/rootfs-used-bytes
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write   # gh release create
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: norns-image
+          path: out
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            out/*.img.zst out/*.sha256 out/*.sbom* out/*.manifest*

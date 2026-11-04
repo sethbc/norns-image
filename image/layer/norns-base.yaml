@@ -1,0 +1,27 @@
+# METABEGIN
+# X-Env-Layer-Name: norns-base
+# X-Env-Layer-Desc: norns base system: tools, ssh, and growing the root
+#  partition to fill the SD card on first boot. The user (we/sleep), sudo and
+#  hostname come from the device section of image/config/norns.yaml.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: device-user-admin,openssh-server
+#
+# X-Env-VarPrefix: norns
+#
+# X-Env-Var-assetdir: ${DIRECTORY}
+# X-Env-Var-assetdir-Desc: Directory holding the norns layers and their
+#  <layer>.d/ asset directories.
+# X-Env-Var-assetdir-Required: n
+# X-Env-Var-assetdir-Valid: dir
+# X-Env-Var-assetdir-Set: y
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - git
+    - i2c-tools
+    - vim-tiny
+    # growpart, used by norns-grow-root (customize.overlay)
+    - cloud-guest-utils
+  customize-hooks:
+    - $BDEBSTRAP_HOOKS/enable-units "$1" norns-grow-root.service

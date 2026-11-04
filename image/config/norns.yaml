@@ -1,0 +1,30 @@
+# norns: Raspberry Pi OS (trixie, arm64) image for norns shields on Pi 4/5.
+# Build with ./build.sh, which passes versions.env as IGconf_norns_* overrides.
+
+device:
+  layer: norns-pi45
+  hostname: norns
+  user1: we
+  user1uid: 1000
+  user1gid: 1000
+  # openssl passwd -6 -salt nornsimage sleep
+  user1passhash: $6$nornsimage$okKWZtY1hkjSdmjBAlx4nVXJTvgmPltyg1R8fJeZoH.lWdf8bKdxnFxLyHTKFAmhdElx.YYFfw6Tb9Tm7MjLd/
+  user1sudo: nopasswd
+
+image:
+  layer: image-rpios
+  # Room for two kernels, their initramfs and future kernel upgrades.
+  boot_part_size: 512M
+  # The root partition grows to fill the card on first boot (norns-base).
+  root_part_size: 200%
+  # Plain dd/Imager images only; no provisioning bundle.
+  idp_enable: n
+
+layer:
+  base: trixie-minbase
+  norns: norns-base
+  os: norns-os
+  deps: norns-deps
+  runtime: norns-runtime
+  maiden: norns-maiden
+  shield: norns-shield

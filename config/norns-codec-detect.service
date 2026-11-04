@@ -1,0 +1,19 @@
+[Unit]
+Description=Detect the norns shield codec (CS4270 or CS4271) and select its overlays
+DefaultDependencies=yes
+After=systemd-modules-load.service systemd-udev-trigger.service
+Before=norns-jack.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/norns-codec-detect
+# 2: no codec found (e.g. a Pi without a shield): not a failure.
+# 10: config.txt was rewritten; the overlays load on the next boot.
+SuccessExitStatus=2 10
+# Reboot only after a rewrite. The next boot finds the block correct (exit 0),
+# so this cannot loop. The leading "-" keeps the test's own status out of the
+# unit's result.
+ExecStopPost=-/bin/sh -c '[ "$$EXIT_STATUS" = 10 ] && exec systemctl --no-block reboot'
+
+[Install]
+WantedBy=multi-user.target

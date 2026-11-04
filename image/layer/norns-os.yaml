@@ -1,0 +1,33 @@
+# METABEGIN
+# X-Env-Layer-Name: norns-os
+# X-Env-Layer-Desc: norns operating system configuration: NetworkManager
+#  (replacing the base suite's systemd-networkd and iwd),
+#  samba (dust share), avahi, polkit rule for maiden, log size limits, realtime
+#  limits and the masks/purges the old setup.sh applied by hand. The norns
+#  units themselves come in a later layer.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: norns-base
+#
+# X-Env-VarPrefix: norns
+#
+# X-Env-Var-assetdir: ${DIRECTORY}
+# X-Env-Var-assetdir-Desc: Directory holding the norns layers and their
+#  <layer>.d/ asset directories.
+# X-Env-Var-assetdir-Required: n
+# X-Env-Var-assetdir-Valid: dir
+# X-Env-Var-assetdir-Set: y
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - network-manager
+    - wpasupplicant
+    - dnsmasq-base
+    - samba
+    - avahi-daemon
+    - midisport-firmware
+    - polkitd
+    - logrotate
+  customize-hooks:
+    - $BDEBSTRAP_HOOKS/enable-units "$1" NetworkManager
+    - ${IGconf_norns_assetdir}/norns-os.d/configure-os.sh "$1" "${IGconf_norns_assetdir}/../../config"

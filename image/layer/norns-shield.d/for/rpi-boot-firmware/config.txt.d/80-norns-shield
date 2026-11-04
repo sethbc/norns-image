@@ -1,0 +1,14 @@
+
+# norns shield (image/layer/norns-shield.d)
+# OLED: matron drives the display itself on /dev/spidev0.0 (D/C GPIO5,
+# reset GPIO6), so there is no display overlay.
+dtparam=spi=on
+# codec control (CS4270 at 0x48 or CS4271 at 0x10 on i2c-1) and audio (I2S)
+dtparam=i2c_arm=on
+dtparam=i2s=on
+# keys K1-K3 and encoders E1-E3
+dtoverlay=norns-buttons-encoders
+# The codec's sound card overlay (dtoverlay=norns-snd-cs4270 or
+# norns-snd-cs4271) goes between these markers.
+# BEGIN norns-codec
+# END norns-codec

@@ -1,0 +1,36 @@
+#!/bin/bash
+# Compiler wrapper that lets monome's norns sources build unchanged on arm64.
+#
+# usage: norns-cc-wrapper <real-compiler> [args...]
+#    or: invoked through a symlink named cc/gcc/c++/g++, which runs
+#        /usr/bin/<link name>
+#
+# norns' wscripts target 32-bit ARM: matron always adds -mfpu=neon (and
+# --release adds -mfpu=neon-fp-armv8 -mfloat-abi=hard), options aarch64 GCC
+# rejects. They also build with -Werror, which newer compilers trip over with
+# new warnings. This drops -mfpu=*, -mfloat-abi=*, -Werror and -Werror=*,
+# keeps every other argument in order and runs the real compiler (its exit
+# status is ours). The image puts the symlinks first on PATH only while it
+# builds norns.
+
+name=${0##*/}
+if [ "$name" = norns-cc-wrapper ]; then
+  if [ $# -lt 1 ]; then
+    echo "usage: norns-cc-wrapper <real-compiler> [args...]" >&2
+    exit 2
+  fi
+  compiler=$1
+  shift
+else
+  compiler=/usr/bin/$name
+fi
+
+args=()
+for arg in "$@"; do
+  case $arg in
+    -mfpu=* | -mfloat-abi=* | -Werror | -Werror=*) ;;
+    *) args+=("$arg") ;;
+  esac
+done
+
+exec "$compiler" "${args[@]}"

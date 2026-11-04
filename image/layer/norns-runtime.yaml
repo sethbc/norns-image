@@ -1,0 +1,82 @@
+# METABEGIN
+# X-Env-Layer-Name: norns-runtime
+# X-Env-Layer-Desc: norns itself: monome/norns built unchanged from the
+#  pinned release tag in /home/we/norns (with a current waf, and a compiler
+#  wrapper that drops the 32-bit ARM flags and -Werror), JACK, SuperCollider with the norns
+#  classes, the norns systemd units, the realtime group and the update guard.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: norns-deps
+#
+# X-Env-VarPrefix: norns
+#
+# X-Env-Var-assetdir: ${DIRECTORY}
+# X-Env-Var-assetdir-Desc: Directory holding the norns layers and their
+#  <layer>.d/ asset directories.
+# X-Env-Var-assetdir-Required: n
+# X-Env-Var-assetdir-Valid: dir
+# X-Env-Var-assetdir-Set: y
+#
+# X-Env-Var-norns_tag:
+# X-Env-Var-norns_tag-Desc: norns release tag (versions.env NORNS_TAG). The
+#  pins have no defaults: build.sh passes them from versions.env.
+# X-Env-Var-norns_tag-Required: y
+# X-Env-Var-norns_tag-Valid: regex:^v[0-9]+\.[0-9]+\.[0-9]+$
+# X-Env-Var-norns_tag-Set: y
+#
+# X-Env-Var-norns_commit:
+# X-Env-Var-norns_commit-Desc: Commit the norns tag must resolve to
+#  (versions.env NORNS_COMMIT).
+# X-Env-Var-norns_commit-Required: y
+# X-Env-Var-norns_commit-Valid: regex:^[0-9a-f]{40}$
+# X-Env-Var-norns_commit-Set: y
+#
+# X-Env-Var-norns_version_txt:
+# X-Env-Var-norns_version_txt-Desc: Update version the release reports in
+#  ~/version.txt (versions.env NORNS_VERSION_TXT).
+# X-Env-Var-norns_version_txt-Required: y
+# X-Env-Var-norns_version_txt-Valid: regex:^[0-9]{6}$
+# X-Env-Var-norns_version_txt-Set: y
+#
+# X-Env-Var-norns_waf_url:
+# X-Env-Var-norns_waf_url-Desc: waf release that runs the norns build files
+#  (versions.env NORNS_WAF_URL).
+# X-Env-Var-norns_waf_url-Required: y
+# X-Env-Var-norns_waf_url-Valid: regex:^https://[^ ]+$
+# X-Env-Var-norns_waf_url-Set: y
+#
+# X-Env-Var-norns_waf_sha256:
+# X-Env-Var-norns_waf_sha256-Desc: sha256 of that waf (versions.env
+#  NORNS_WAF_SHA256).
+# X-Env-Var-norns_waf_sha256-Required: y
+# X-Env-Var-norns_waf_sha256-Valid: regex:^[0-9a-f]{64}$
+# X-Env-Var-norns_waf_sha256-Set: y
+# METAEND
+---
+mmdebstrap:
+  packages:
+    # norns build dependencies (wscripts at the tag; libgpiod v1 and
+    # libmonome come from norns-deps)
+    - libasound2-dev
+    - libevdev-dev
+    - libcairo2-dev
+    - liblua5.3-dev
+    - libnanomsg-dev
+    - libavahi-compat-libdnssd-dev
+    - libsndfile1-dev
+    - libjack-jackd2-dev
+    - libreadline-dev
+    # matron's device_hid.c includes <glib.h>
+    - libglib2.0-dev
+    # JACK; jack_wait (norns-jack.service) and jack_connect/jack_disconnect
+    # (matron's audio routing) live in jack-example-tools since jack2 1.9.22
+    - jackd2
+    - jack-example-tools
+    # SuperCollider
+    - supercollider-language
+    - supercollider-server
+    - sc3-plugins
+    # commands the norns Lua code runs: curl (update check), iw (wifi signal)
+    - curl
+    - iw
+  customize-hooks:
+    - ${IGconf_norns_assetdir}/norns-runtime.d/build-norns.sh "$1" "${IGconf_norns_assetdir}/../.." "${IGconf_norns_norns_tag}" "${IGconf_norns_norns_commit}" "${IGconf_norns_norns_version_txt}" "${IGconf_norns_norns_waf_url}" "${IGconf_norns_norns_waf_sha256}"
