@@ -6,7 +6,9 @@
 #   --clean    remove work/ and out/ first
 #
 # Writes to out/:
-#   norns-trixie-arm64-<version>.img.zst (+ .sha256, .sbom.zst, .manifest.zst)
+#   norns-trixie-arm64-<version>.img.zst (+ .sha256, .sbom.zst, .manifest.zst);
+#                      earlier builds' images are removed
+#   image-name         norns-trixie-arm64-<version>, the prefix of those files
 #   rootfs-path        absolute path of the built filesystem
 #   rootfs-used-bytes  space the root filesystem uses (max 2000000000)
 #   build-kind         "image", or "fs-only" (no image stage: no config.txt
@@ -53,7 +55,8 @@ if [ "$clean" = 1 ]; then
 fi
 
 version=$(git -C "$TOP" describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' --always --dirty)
-name=norns-trixie-arm64-$version
+prefix=norns-trixie-arm64-
+name=$prefix$version
 
 # Every versions.env entry reaches the layers as IGconf_norns_<lowercase name>.
 overrides=(IGconf_artefact_version="$version" IGconf_image_name="$name")
@@ -65,8 +68,9 @@ mkdir -p "$WORK" "$OUT"
 # shellcheck source=scripts/prune.sh
 . "$TOP/scripts/prune.sh"
 prune_stale_work "$WORK" "$version" "$name"
+prune_stale_out "$OUT" "$prefix" "$name"
 # Tests read rootfs-path; never let a failed build leave a stale one behind.
-rm -f -- "$OUT/rootfs-path" "$OUT/rootfs-used-bytes" "$OUT/build-kind"
+rm -f -- "$OUT/rootfs-path" "$OUT/rootfs-used-bytes" "$OUT/build-kind" "$OUT/image-name"
 ig_args=(build -S "$TOP/image" -c norns.yaml -B "$WORK")
 [ "$fs_only" = 1 ] && ig_args+=(-f)
 
@@ -90,6 +94,7 @@ if [ "$fs_only" = 0 ]; then
   cp "$deploy/filesystem-$version.sbom.zst" "$OUT/$name.sbom.zst"
   cp "$deploy/manifest.zst" "$OUT/$name.manifest.zst"
   (cd "$OUT" && sha256sum "$name.img.zst" > "$name.img.zst.sha256")
+  echo "$name" > "$OUT/image-name"
   echo "image: $OUT/$name.img.zst"
 fi
 

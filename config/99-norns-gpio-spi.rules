@@ -1,0 +1,6 @@
+# matron (user we) drives the OLED through /dev/spidev0.0 and the D/C and
+# reset lines on /dev/gpiochip0. Raspberry Pi OS gives these nodes to the
+# spi and gpio groups in raspberrypi-sys-mods' 99-com.rules, which this
+# image does not install; without a rule they are root:root 0600.
+SUBSYSTEM=="gpio", KERNEL=="gpiochip*", GROUP="gpio", MODE="0660"
+SUBSYSTEM=="spidev", KERNEL=="spidev*", GROUP="spi", MODE="0660"

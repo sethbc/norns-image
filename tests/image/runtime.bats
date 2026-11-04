@@ -88,7 +88,7 @@ norns_git() {
   done
 }
 @test "norns units installed from config/" {
-  for f in "$REPO_ROOT"/config/norns-*.service "$REPO_ROOT"/config/norns-*.socket "$REPO_ROOT"/config/norns.target; do
+  for f in "$REPO_ROOT"/config/norns-*.service "$REPO_ROOT"/config/norns-*.socket "$REPO_ROOT"/config/norns-*.timer "$REPO_ROOT"/config/norns.target; do
     cmp "$f" "$ROOTFS/etc/systemd/system/${f##*/}" || return 1
   done
 }
@@ -97,7 +97,8 @@ norns_git() {
   for f in "$REPO_ROOT"/config/norns-*.service; do
     u=$ROOTFS/etc/systemd/system/${f##*/}
     [ -f "$u" ] || { echo "${f##*/} not installed"; return 1; }
-    for p in $(sed -n 's/^Exec[A-Za-z]*=[-@+!:]*//p' "$u" | tr ' ' '\n' | grep '^/'); do
+    # /proc, /sys, /dev and /run paths exist only on the running system
+    for p in $(sed -n 's/^Exec[A-Za-z]*=[-@+!:]*//p' "$u" | tr ' ' '\n' | grep '^/' | grep -Ev '^/(proc|sys|dev|run)/'); do
       in_root test -e "$p" || { echo "${f##*/}: $p"; return 1; }
     done
   done
@@ -111,6 +112,71 @@ norns_git() {
   groups=" $(in_root id -nG we) "
   for g in audio realtime gpio i2c spi input; do
     [[ "$groups" == *" $g "* ]] || { echo "we not in $g"; return 1; }
+  done
+}
+# matron (as we) opens /dev/spidev0.0 (OLED data) and /dev/gpiochip0 (OLED
+# D/C and reset). raspberrypi-sys-mods, whose 99-com.rules gives them to the
+# spi and gpio groups, is not in the image, so without this rule both nodes
+# are root:root 0600 and the screen stays blank.
+@test "gpiochip and spidev nodes belong to the gpio and spi groups" {
+  r=/etc/udev/rules.d/99-norns-gpio-spi.rules
+  cmp "$REPO_ROOT/config/99-norns-gpio-spi.rules" "$ROOTFS$r"
+  grep -qxF 'SUBSYSTEM=="gpio", KERNEL=="gpiochip*", GROUP="gpio", MODE="0660"' "$ROOTFS$r"
+  grep -qxF 'SUBSYSTEM=="spidev", KERNEL=="spidev*", GROUP="spi", MODE="0660"' "$ROOTFS$r"
+  for g in gpio spi; do
+    gid=$(in_root getent group "$g" | cut -d: -f3)
+    [ -n "$gid" ] && [ "$gid" -lt 1000 ] || { echo "$g: gid '$gid' is not a system group"; return 1; }
+  done
+  # syntax, and the group names resolve in the image
+  in_root udevadm verify "$r"
+}
+# The codec is a module udev loads, so the card can appear after JACK's
+# ordering dependencies are done; jackd would fail on a missing hw:sndrpimonome
+# and take crone and sclang (Requires=norns-jack) down with it. The start job
+# waits for the card instead, so they start after it as usual.
+@test "jack waits for the sound card before starting" {
+  u=$ROOTFS/etc/systemd/system/norns-jack.service
+  grep -qx 'ExecStart=/usr/bin/jackd -R -P 95 -d alsa -d hw:sndrpimonome -r 48000 -n 3 -p 128 -S -s' "$u"
+  # the shell snippet, unescaped as systemd runs it ($$ is $)
+  wait=$(sed -n "s|^ExecStartPre=/bin/sh -c '\(.*\)'\$|\1|p" "$u" | sed 's/\$\$/$/g')
+  [[ "$wait" == *"/proc/asound/sndrpimonome"* ]]
+  # 50 x 0.2 s: gives up (and fails the start) after about 10 s
+  [[ "$wait" == *'$(seq 50)'* ]]
+  [[ "$wait" == *"sleep 0.2"* ]]
+  [[ "$wait" == *"exit 1" ]]
+  # it returns as soon as the card is there
+  d=$BATS_TEST_TMPDIR/proc/asound
+  mkdir -p "$d/sndrpimonome"
+  run timeout 5 sh -c "${wait//\/proc\/asound/$d}"
+  [ "$status" -eq 0 ]
+}
+# With no screen and no network, the boot partition is the only way in: the
+# dump is readable by putting the card in any computer.
+@test "boot diagnostics are written to the boot partition every boot" {
+  cmp "$REPO_ROOT/scripts/norns-bootlog" "$ROOTFS/usr/local/sbin/norns-bootlog"
+  in_root test -x /usr/local/sbin/norns-bootlog
+  for u in norns-bootlog-early.service norns-bootlog.service norns-bootlog.timer; do
+    [ "$(in_root systemctl is-enabled $u)" = enabled ] || { echo "$u not enabled"; return 1; }
+  done
+  for u in norns-bootlog-early norns-bootlog; do
+    f=$ROOTFS/etc/systemd/system/$u.service
+    grep -qx 'ExecStart=-/usr/local/sbin/norns-bootlog' "$f"
+    grep -qx 'RequiresMountsFor=/boot/firmware' "$f"
+  done
+  # early: right after the local filesystems, before networking and norns, so
+  # a boot that hangs later still leaves a log
+  e=$ROOTFS/etc/systemd/system/norns-bootlog-early.service
+  grep -qx 'DefaultDependencies=no' "$e"
+  grep -qx 'After=local-fs.target systemd-journald.service' "$e"
+  grep -qx 'WantedBy=sysinit.target' "$e"
+  grep -qx 'After=multi-user.target' "$ROOTFS/etc/systemd/system/norns-bootlog.service"
+  grep -qx 'OnBootSec=90s' "$ROOTFS/etc/systemd/system/norns-bootlog.timer"
+  grep -qx 'dir=/boot/firmware' "$ROOTFS/usr/local/sbin/norns-bootlog"
+  # (/boot/firmware is the FAT partition: rpi-image-gen writes that fstab line
+  # into the disk image, not the filesystem tested here)
+  # the commands it runs are in the image
+  for c in systemctl journalctl ip ss aplay lsmod df timeout sed head mktemp; do
+    in_root sh -c "command -v $c" >/dev/null || { echo "$c"; return 1; }
   done
 }
 # SYSTEM > UPDATE: ~/version.txt makes stable report "up to date"; for a

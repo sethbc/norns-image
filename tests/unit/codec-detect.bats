@@ -177,3 +177,31 @@ SH
   [ "$status" -eq 10 ]
   ! grep -q 'pinctrl set' "$LOG"
 }
+# A managed block that is not exactly one BEGIN line followed by one END line
+# is left alone: rewriting it would drop or duplicate the user's lines.
+malformed() {
+  printf '%s\n' "$@" > "$CFG"
+  before=$(sha256sum "$CFG")
+  FAKE_I2C=0x48 run detect
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"malformed"* ]]
+  [ "$(sha256sum "$CFG")" = "$before" ]
+  [ "$(ls "$W" | grep -c config)" -eq 1 ]
+  # nothing probed, GPIO17 never taken
+  [ ! -s "$LOG" ]
+}
+@test "BEGIN without END: warns, exits 1, file untouched" {
+  malformed 'a=1' '# BEGIN norns-codec' 'dtoverlay=norns-snd-cs4270' 'b=2' 'c=3'
+}
+@test "END without BEGIN: warns, exits 1, file untouched" {
+  malformed 'a=1' '# END norns-codec' 'b=2'
+}
+@test "END before BEGIN: warns, exits 1, file untouched" {
+  malformed 'a=1' '# END norns-codec' 'b=2' '# BEGIN norns-codec' 'c=3'
+}
+@test "two blocks: warns, exits 1, file untouched" {
+  malformed '# BEGIN norns-codec' '# END norns-codec' 'b=2' '# BEGIN norns-codec' '# END norns-codec'
+}
+@test "nested BEGIN: warns, exits 1, file untouched" {
+  malformed '# BEGIN norns-codec' '# BEGIN norns-codec' '# END norns-codec' 'b=2'
+}

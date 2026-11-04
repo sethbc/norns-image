@@ -4,24 +4,46 @@ Run by hand after flashing a release (or a CI-built image). Tick each box, and
 record the outcome in the results table at the end.
 
 Conventions: log in with `ssh we@norns.local` (user `we`, password `sleep`;
-`172.24.1.1` if mDNS is not working). "Boot" means the first boot of a freshly
+if mDNS is not working, use the IP that SYSTEM > WIFI shows, or `10.42.0.1`
+over the norns hotspot, see A5). "Boot" means the first boot of a freshly
 flashed card unless a step says otherwise. Commands run on the norns.
 
 Flash the `.img.zst` with Raspberry Pi Imager (Use custom) or `zstdcat ... | sudo dd`
 (see the README), using a card larger than the image so the grow step has work
 to do.
 
+## If something doesn't work
+
+Every boot writes a diagnostics dump to the boot partition, so it can be read
+without a screen or network: power off, put the SD card in your computer,
+open the boot volume (`bootfs`) and read `norns-boot.log` (the previous
+boot's is `norns-boot.prev.log`). It is written early in the boot (right
+after the filesystems are mounted), again when the boot is done and again
+90 s after boot, so a boot that hangs part way still leaves the early one.
+`norns-boot-count` next to it counts the boots: if it climbs on its own, the
+norns is rebooting in a loop. The log holds the boot count and the last few
+boots (`journalctl --list-boots`), failed units, the norns, ssh and
+first-boot units' status, this boot's warnings, the network addresses and
+listening ports, the device nodes, the sound cards and the codec block of
+`config.txt`. The journal itself is kept on the card, so after a hang or a
+crash `journalctl -b -1` on the next boot shows the boot that failed. Attach
+the log to any failure report.
+
 ## A. Pi 4 + shieldXL (the target)
 
 ### A1. First boot
 
 - [ ] The norns screen lights and shows the norns UI within about two minutes. The
-  device reboots once on the way (see A2); that is expected.
+  device reboots once on the way, a few seconds into the first boot (see A2);
+  that is expected. The checks below therefore run on the second boot and read
+  the first boot's log with `-b -1`.
 - [ ] Root filesystem grew to fill the card: `df -h /` shows a size close to the
   card's capacity, not the ~2 GB image size.
-- [ ] `systemctl status norns-grow-root` shows `Active: active (exited)` with
-  status=0/SUCCESS (first boot only). Afterwards
-  `systemctl is-enabled norns-grow-root` prints `disabled`: it runs once.
+- [ ] The grow ran on the first boot and finished before the reboot:
+  `journalctl -u norns-grow-root -b -1` shows growpart's
+  `CHANGED: partition=2 ...`, resize2fs's `... is now ... blocks long` and the
+  unit finishing without a failure. `systemctl is-enabled norns-grow-root`
+  prints `disabled`: it runs once.
 
 ### A2. Codec detection and the single reboot
 
@@ -48,6 +70,9 @@ to do.
 ### A3. Screen, keys, encoders
 
 - [ ] The OLED shows the norns UI (home screen, not blank or garbled).
+- [ ] matron (user `we`) can open the OLED's device nodes:
+  `ls -l /dev/spidev0.0 /dev/gpiochip0` shows `crw-rw----` with group `spi`
+  for `spidev0.0` and group `gpio` for `gpiochip0`.
 - [ ] Input devices exist:
   `ls /dev/input/by-path/ | grep -E 'platform-keys-event|platform-soc:knob[123]-event'`
   prints four entries (`platform-keys-event`, `platform-soc:knob1-event`,
@@ -67,10 +92,21 @@ to do.
   `journalctl -u norns-jack` has no `xrun` lines. Check again after several
   minutes of playback: `journalctl -u norns-jack | grep -ci xrun` prints `0`.
 - [ ] Audio in to out passes: feed a source into the shield's inputs, hear it at
-  the outputs (norns passes input to output by default). `arecord -f dat -d 5
-  test.wav` then `aplay test.wav` is a quick record check.
-- [ ] An engine plays: in maiden or on the device load a script using PolyPerc
-  (e.g. `awake`, or `engine.name = "PolyPerc"`) and hear notes.
+  the outputs (norns passes input to output by default).
+- [ ] Recording works: in the TAPE menu (K1 opens the menu, E1 moves to TAPE)
+  record a few seconds of the input on the REC side, then play it back on the
+  PLAY side (files land in `~/dust/audio/tape/`). `arecord`/`aplay` cannot
+  open the card while JACK holds it; to use them instead, stop norns first
+  with `~/norns/stop.sh`, run `arecord -D plughw:sndrpimonome -f dat -d 5
+  test.wav` and `aplay -D plughw:sndrpimonome test.wav`, then start norns
+  again with `~/norns/start.sh`.
+- [ ] An engine plays. `~/dust/code` is empty on a fresh image, so first get a
+  script: in maiden's project manager, on the `available` tab, refresh the
+  catalogs and install `awake` (community catalog; needs internet), then on
+  the norns choose HOME > SELECT > awake and hear notes. Without internet,
+  load PolyPerc from maiden's REPL (matron):
+  `engine.load("PolyPerc", function() engine.hz(440) end)` plays a note once
+  the engine is up; `engine.hz(330)` plays another.
 - [ ] sclang started headless:
   `journalctl -u norns-sclang -b | head -30` shows SuperCollider's startup with
   no Qt "could not connect to display" error, and
@@ -87,11 +123,15 @@ to do.
 - [ ] SMB share reachable: `\\norns.local\dust` (Windows) or
   `smb://norns.local/dust` (macOS) mounts as user `we`, password `sleep`, and
   you can create and delete a file in it.
-- [ ] Wi-Fi: with no known network the norns hotspot appears (SSID `norns`, PSK
-  `nnnnnnnn`) and `ssh we@172.24.1.1` works over it. Then, on the norns,
-  `wifi.sh scan` and `wifi.sh select "My Wifi SSID" "wifi-password"` joins your
-  network and `ssh we@norns.local` works over it. (`wifi-hotspot.sh` returns to
-  hotspot mode.)
+- [ ] Wi-Fi, joining a network: SYSTEM > WIFI > ADD lists the networks in
+  range; pick yours and enter its password. The WIFI page then shows STATUS,
+  NETWORK and IP, and `ssh we@norns.local` works over it. (Over ssh or a
+  keyboard, `nmcli device wifi connect "My Wifi SSID" password "wifi-password"`
+  does the same.) SYSTEM > WIFI > CONNECT rejoins a saved network.
+- [ ] Wi-Fi, hotspot: it is not automatic (with no known network the norns just
+  stays offline). SYSTEM > WIFI > HOTSPOT starts it: SSID `norns`, password
+  `nnnnnnnn`. Join it from a computer; `ssh we@10.42.0.1` (NetworkManager's
+  shared-mode address) works over it.
 - [ ] A USB grid or other monome/MIDI device is detected: plug it in, then in the
   norns SYSTEM > DEVICES menu it appears (`lsusb` shows it too).
 
@@ -126,10 +166,10 @@ to do.
 
 ### A8. Shutdown
 
-- [ ] SLEEP in the norns menu (SYSTEM > SLEEP) shuts the system down cleanly: the
-  screen blanks, the Pi's activity LED stops, and on the next boot
-  `journalctl -b -1 | tail` shows an orderly shutdown (no fsck repairs, no
-  emergency mode).
+- [ ] SLEEP on the norns HOME menu (HOME > SLEEP, then K3 at "sleep?") shuts the
+  system down cleanly: the screen blanks, the Pi's activity LED stops, and on
+  the next boot `journalctl -b -1 | tail` shows an orderly shutdown (no fsck
+  repairs, no emergency mode).
 
 ## B. Pi 5 + shieldXL (smoke test only)
 

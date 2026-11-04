@@ -81,9 +81,18 @@ setup() {
   grep -q 'audit=false' "$d/101-logging.conf"
   grep -q 'auth-polkit=false' "$d/200-disable-nmcli-auth.conf"
 }
-@test "journald is size limited" {
-  grep -q '^\[Journal\]' "$ROOTFS/etc/systemd/journald.conf"
-  grep -q '^SystemMaxUse=10M' "$ROOTFS/etc/systemd/journald.conf"
+# Bounded, but big enough that the previous boots' logs (journalctl -b -1,
+# which the acceptance checklist reads) are still there.
+@test "journald is size limited, keeping several boots" {
+  j=$ROOTFS/etc/systemd/journald.conf
+  cmp "$REPO_ROOT/config/journald.conf" "$j"
+  grep -qx '\[Journal\]' "$j"
+  grep -qx 'Storage=persistent' "$j"
+  # on disk within 15 s, so a crash or hang loses little of -b -1
+  grep -qx 'SyncIntervalSec=15s' "$j"
+  grep -qx 'SystemMaxUse=50M' "$j"
+  # a single file would keep only the current one: no SystemMaxFiles=1
+  ! grep -q '^SystemMaxFiles=' "$j" || false
 }
 @test "logrotate config" {
   grep -q '^rotate 1' "$ROOTFS/etc/logrotate.conf"

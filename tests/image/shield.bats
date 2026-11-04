@@ -113,6 +113,19 @@ kernels() { in_root ls /lib/modules; }
   grep -qx i2c-dev "$ROOTFS/etc/modules-load.d/norns-i2c.conf"
 }
 
+# The detector's first-boot reboot must not cut short the other first-boot
+# jobs: growing the root partition and filesystem, and generating the SSH
+# host keys.
+@test "codec detector runs after the first-boot jobs" {
+  u=$ROOTFS/etc/systemd/system/norns-codec-detect.service
+  after=" $(sed -n 's/^After=//p' "$u" | tr '\n' ' ') "
+  for dep in norns-grow-root.service ssh-hostkeys-generate.service; do
+    [[ "$after" == *" $dep "* ]] || { echo "not After=$dep"; return 1; }
+    # the names are the image's real first-boot units
+    [ "$(in_root systemctl is-enabled "$dep")" = enabled ] || { echo "$dep not enabled"; return 1; }
+  done
+}
+
 @test "codec detector finds no shield in the build chroot and leaves config.txt alone" {
   require_image_stage
   c=$ROOTFS/boot/firmware/config.txt

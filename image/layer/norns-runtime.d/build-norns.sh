@@ -1,6 +1,7 @@
 #!/bin/bash
 # Build monome's norns from its release tag, unchanged, into /home/we/norns,
-# and install what runs it: SC classes, systemd units, groups, update guard.
+# and install what runs it: SC classes, systemd units, groups, update guard,
+# boot diagnostics.
 # usage: build-norns.sh <rootfs> <repo-dir> <tag> <commit> <version-txt> \
 #                       <waf-url> <waf-sha256>
 #
@@ -82,7 +83,12 @@ chroot "$root" /bin/bash -euo pipefail -c '
 
 # Groups: realtime (limits.d/99-realtime.conf), audio for JACK, and the
 # device nodes matron opens (gpiochip0, spidev0.0, i2c-1, /dev/input/*).
-chroot "$root" groupadd --system --force realtime
+# gpio and spi own gpiochip* and spidev* through 99-norns-gpio-spi.rules, so
+# they must exist whatever the base layers create.
+for g in realtime gpio spi; do
+  chroot "$root" groupadd --system --force "$g"
+done
+install -D -m 0644 "$repo/config/99-norns-gpio-spi.rules" "$root/etc/udev/rules.d/99-norns-gpio-spi.rules"
 groups=audio,realtime
 for g in gpio i2c spi input; do
   if chroot "$root" getent group "$g" >/dev/null; then groups+=,$g; fi
@@ -121,8 +127,14 @@ chroot "$root" setpriv --reuid=we --regid=we --init-groups \
 # every boot by norns-update-guard.service.
 chroot "$root" install -d -m 0755 -o root -g root /home/we/update
 
+# Boot diagnostics on the FAT boot partition: early in the boot
+# (norns-bootlog-early.service), at its end (norns-bootlog.service) and 90 s
+# after it (norns-bootlog.timer).
+install -D -m 0755 "$repo/scripts/norns-bootlog" "$root/usr/local/sbin/norns-bootlog"
+
 # systemd units (maiden's binary comes from a later layer)
-for f in "$repo"/config/norns-*.service "$repo"/config/norns-*.socket "$repo"/config/norns.target; do
+for f in "$repo"/config/norns-*.service "$repo"/config/norns-*.socket "$repo"/config/norns-*.timer "$repo"/config/norns.target; do
   install -m 0644 "$f" "$root/etc/systemd/system/${f##*/}"
 done
-chroot "$root" systemctl enable norns.target norns-update-guard.service
+chroot "$root" systemctl enable norns.target norns-update-guard.service \
+  norns-bootlog-early.service norns-bootlog.service norns-bootlog.timer
