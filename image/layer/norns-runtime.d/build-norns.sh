@@ -82,7 +82,12 @@ chroot "$root" /bin/bash -euo pipefail -c '
 
 # Groups: realtime (limits.d/99-realtime.conf), audio for JACK, and the
 # device nodes matron opens (gpiochip0, spidev0.0, i2c-1, /dev/input/*).
-chroot "$root" groupadd --system --force realtime
+# gpio and spi own gpiochip* and spidev* through 99-norns-gpio-spi.rules, so
+# they must exist whatever the base layers create.
+for g in realtime gpio spi; do
+  chroot "$root" groupadd --system --force "$g"
+done
+install -D -m 0644 "$repo/config/99-norns-gpio-spi.rules" "$root/etc/udev/rules.d/99-norns-gpio-spi.rules"
 groups=audio,realtime
 for g in gpio i2c spi input; do
   if chroot "$root" getent group "$g" >/dev/null; then groups+=,$g; fi

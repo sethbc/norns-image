@@ -113,6 +113,22 @@ norns_git() {
     [[ "$groups" == *" $g "* ]] || { echo "we not in $g"; return 1; }
   done
 }
+# matron (as we) opens /dev/spidev0.0 (OLED data) and /dev/gpiochip0 (OLED
+# D/C and reset). raspberrypi-sys-mods, whose 99-com.rules gives them to the
+# spi and gpio groups, is not in the image, so without this rule both nodes
+# are root:root 0600 and the screen stays blank.
+@test "gpiochip and spidev nodes belong to the gpio and spi groups" {
+  r=/etc/udev/rules.d/99-norns-gpio-spi.rules
+  cmp "$REPO_ROOT/config/99-norns-gpio-spi.rules" "$ROOTFS$r"
+  grep -qxF 'SUBSYSTEM=="gpio", KERNEL=="gpiochip*", GROUP="gpio", MODE="0660"' "$ROOTFS$r"
+  grep -qxF 'SUBSYSTEM=="spidev", KERNEL=="spidev*", GROUP="spi", MODE="0660"' "$ROOTFS$r"
+  for g in gpio spi; do
+    gid=$(in_root getent group "$g" | cut -d: -f3)
+    [ -n "$gid" ] && [ "$gid" -lt 1000 ] || { echo "$g: gid '$gid' is not a system group"; return 1; }
+  done
+  # syntax, and the group names resolve in the image
+  in_root udevadm verify "$r"
+}
 # SYSTEM > UPDATE: ~/version.txt makes stable report "up to date"; for a
 # beta (K1-alt) install the download into ~/update fails, as that is a
 # root-owned directory made immutable at boot.
