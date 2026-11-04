@@ -27,7 +27,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo vendor/rpi-image-gen/install_deps.sh
-          sudo apt-get install -y bats uidmap podman
+          sudo apt-get install -y bats uidmap podman device-tree-compiler
 
       - name: Ensure subordinate uid/gid range for the runner user
         run: |

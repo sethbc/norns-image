@@ -38,3 +38,25 @@ in_ns() {
 rootfs_file() {
   printf '%s/%s\n' "$ROOTFS" "${1#/}"
 }
+
+# Compiled device tree overlays (tests/unit/overlays.bats compiles
+# overlays/NAME-overlay.dts to $DTBO_DIR/NAME.dtbo).
+dtbo_path() { printf '%s/%s.dtbo\n' "${DTBO_DIR:-$BATS_TMPDIR}" "$1"; }
+
+# fdtdump of overlay NAME.
+dtbo() { fdtdump "$(dtbo_path "$1")" 2>/dev/null; }
+
+# Path in overlay NAME of the node labelled LABEL (from its __symbols__).
+ov_path() { fdtget "$(dtbo_path "$1")" /__symbols__ "$2"; }
+
+# Property PROP of the node labelled LABEL in overlay NAME.
+ov_get() { fdtget "$(dtbo_path "$1")" "$(ov_path "$1" "$2")" "$3"; }
+
+# target-path of the fragment that holds the node labelled LABEL in overlay
+# NAME (the node it lands under in the live tree).
+ov_frag_target() {
+  local p
+  p=$(ov_path "$1" "$2") || return
+  p=${p#/}; p=/${p%%/*}
+  fdtget "$(dtbo_path "$1")" "$p" target-path
+}
