@@ -1,0 +1,3 @@
+
+# norns shield: the codec drives the I2S sound card (dtoverlay below)
+dtparam=audio=off

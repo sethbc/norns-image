@@ -19,6 +19,15 @@ require_rootfs() {
   fi
 }
 
+# Skip unless the last build ran rpi-image-gen's image stage: its preimage
+# hooks assemble /boot/firmware/config.txt and cmdline.txt, so a --fs-only
+# build doesn't have them (CI always builds the image).
+require_image_stage() {
+  if [ "$(cat "$REPO_ROOT/out/build-kind" 2>/dev/null)" = fs-only ]; then
+    skip "--fs-only build: config.txt and cmdline.txt are written at the image stage"
+  fi
+}
+
 # Run a command inside the built arm64 filesystem (qemu-user binfmt). The
 # chroot runs in rpi-image-gen's user namespace (podman unshare when not
 # root): the build leaves files owned by subordinate uids, and only there do

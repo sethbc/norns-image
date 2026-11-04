@@ -9,6 +9,8 @@
 #   norns-trixie-arm64-<version>.img.zst (+ .sha256, .sbom.zst, .manifest.zst)
 #   rootfs-path        absolute path of the built filesystem
 #   rootfs-used-bytes  space the root filesystem uses (max 2000000000)
+#   build-kind         "image", or "fs-only" (no image stage: no config.txt
+#                      or cmdline.txt in the filesystem)
 set -euo pipefail
 
 TOP=$(cd "$(dirname "$0")" && pwd)
@@ -34,6 +36,7 @@ for arg in "$@"; do
   esac
 done
 
+command -v dtc >/dev/null || die "dtc is missing (the overlays need it); install device-tree-compiler"
 [ -x "$IG/rpi-image-gen" ] || die "vendor/rpi-image-gen is missing; run: git submodule update --init"
 
 set -a
@@ -63,7 +66,7 @@ mkdir -p "$WORK" "$OUT"
 . "$TOP/scripts/prune.sh"
 prune_stale_work "$WORK" "$version" "$name"
 # Tests read rootfs-path; never let a failed build leave a stale one behind.
-rm -f -- "$OUT/rootfs-path" "$OUT/rootfs-used-bytes"
+rm -f -- "$OUT/rootfs-path" "$OUT/rootfs-used-bytes" "$OUT/build-kind"
 ig_args=(build -S "$TOP/image" -c norns.yaml -B "$WORK")
 [ "$fs_only" = 1 ] && ig_args+=(-f)
 
@@ -73,6 +76,7 @@ start=$SECONDS
 rootfs=$WORK/chroot-$version/filesystem
 [ -d "$rootfs/etc" ] || die "no filesystem at $rootfs"
 echo "$rootfs" > "$OUT/rootfs-path"
+if [ "$fs_only" = 1 ]; then echo fs-only; else echo image; fi > "$OUT/build-kind"
 
 # /boot/firmware is its own partition, so it doesn't count against root.
 used=$(ns sh -c 'cd "$1" && du -s -x -B1 --exclude=./boot/firmware .' _ "$rootfs" | cut -f1)

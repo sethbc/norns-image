@@ -27,3 +27,4 @@ layer:
   deps: norns-deps
   runtime: norns-runtime
   maiden: norns-maiden
+  shield: norns-shield

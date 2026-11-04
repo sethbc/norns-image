@@ -1,0 +1,29 @@
+# METABEGIN
+# X-Env-Layer-Name: norns-shield
+# X-Env-Layer-Desc: norns shield hardware on the Pi 4: the sound card, key
+#  and encoder overlays (overlays/, compiled at build time), the CS4270 codec
+#  module (packages/monome-codecs-dkms, built by DKMS for every kernel and
+#  again on kernel upgrades), and the config.txt and cmdline.txt settings
+#  (drop-ins in norns-shield.d/for/, assembled at the image stage).
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: rpi-boot-firmware,linux-base
+# X-Env-Layer-RequiresProvider: rpi-device
+#
+# X-Env-VarPrefix: norns
+#
+# X-Env-Var-assetdir: ${DIRECTORY}
+# X-Env-Var-assetdir-Desc: Directory holding the norns layers and their
+#  <layer>.d/ asset directories.
+# X-Env-Var-assetdir-Required: n
+# X-Env-Var-assetdir-Valid: dir
+# X-Env-Var-assetdir-Set: y
+# METAEND
+---
+mmdebstrap:
+  packages:
+    # builds the codec module now and for every kernel apt installs later;
+    # the headers (linux-headers-rpi-v8, linux-headers-rpi-2712) come from
+    # the device layer
+    - dkms
+  customize-hooks:
+    - ${IGconf_norns_assetdir}/norns-shield.d/install-shield.sh "$1" "${IGconf_norns_assetdir}/../.."

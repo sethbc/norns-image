@@ -129,11 +129,12 @@ gpio_pins() {
 
 @test "no display overlay and nothing on the OLED's GPIO5/6" {
   for f in "$REPO_ROOT"/overlays/*.dts; do
-    ! grep -qi 'ssd1322\|fbtft' "$f"
+    ! grep -qi 'ssd1322\|fbtft' "$f" || false
   done
   for n in 1 2 3; do
     for p in $(ov_get norns-buttons-encoders "knob_pins$n" brcm,pins) $(gpio_pins norns-buttons-encoders "button$n" | cut -d' ' -f1); do
-      [ "$p" != 5 ] && [ "$p" != 6 ]
+      [ "$p" != 5 ]
+      [ "$p" != 6 ]
     done
   done
 }
