@@ -108,8 +108,8 @@ kernels() { in_root ls /lib/modules; }
   grep -q 'After=systemd-modules-load.service' "$u"
   grep -q 'SuccessExitStatus=2 10' "$u"
   [ -x "$ROOTFS/usr/local/sbin/norns-codec-detect" ]
-  in_root pinctrl -h >/dev/null 2>&1 || in_root test -x /usr/bin/pinctrl
-  in_root test -x /usr/bin/i2cget
+  [ -x "$ROOTFS/usr/bin/pinctrl" ]
+  [ -x "$ROOTFS/usr/sbin/i2cget" ]
 }
 
 @test "codec detector finds no shield in the build chroot and leaves config.txt alone" {
