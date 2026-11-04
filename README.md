@@ -21,16 +21,26 @@ What to check after flashing an image: [docs/testing/acceptance.md](docs/testing
 ```
 git clone --recursive https://github.com/sethbc/norns-image   # add -b <branch or tag> as needed
 cd norns-image
-vendor/rpi-image-gen/install_deps.sh     # once; installs rpi-image-gen's build dependencies
+# once: rpi-image-gen's build dependencies (installs packages, hence sudo) ...
+sudo vendor/rpi-image-gen/install_deps.sh
+# ... and the rest, as CI installs them (.github/workflows/build.yml)
+sudo apt-get install -y bats uidmap podman device-tree-compiler
 ./build.sh
+tests/run.sh all     # optional: the unit tests and the built image's tests
 ```
 
-Use a Debian or Ubuntu host with `qemu-user-binfmt` installed (or a native
-arm64 host). `./build.sh --fs-only` builds just the root filesystem, which is
-what `tests/run.sh image` inspects; `--clean` removes `work/` and `out/` first.
+Use a Debian or Ubuntu host. An arm64 host builds natively; on x86 also
+install `qemu-user-binfmt` so the arm64 filesystem can run. The build runs
+without root, in a podman user namespace, so your user needs a subordinate
+uid/gid range in `/etc/subuid` and `/etc/subgid` (most distributions add one
+when the user is created; CI adds `<user>:100000:65536`).
+`./build.sh --fs-only` builds just the root filesystem, which is what
+`tests/run.sh image` inspects; `--clean` removes `work/` and `out/` first.
 
 The image lands in `out/` as `norns-trixie-arm64-<version>.img.zst`, with a
-`.sha256`, an SBOM and a manifest.
+`.sha256`, an SBOM and a manifest (`out/image-name` holds the
+`norns-trixie-arm64-<version>` prefix). Each build removes the previous
+builds' images from `out/`.
 
 Flash it with [Raspberry Pi Imager](https://www.raspberrypi.com/software/)
 (Use custom), or from a shell:
@@ -77,32 +87,16 @@ first boot the root partition grows to fill the card.
   boot, so a download fails ("update failed."); the next key press shuts
   down as usual. Update by flashing a newer image.
 
-## start
+## Logging in
 
-* attach mini-usb to computer usb
-* insert wifi adapter
-* hold key 1 for 3 seconds
-* rear LED shows orange for power, white for disk activity
+Log in as `we`, password `sleep`: `ssh we@norns.local` (mDNS, through avahi),
+or the IP address that SYSTEM > WIFI shows.
 
-## serial connection
+Wi-Fi is NetworkManager, driven from the norns menu:
 
-* linux: `screen /dev/ttyACM0 115200`
-* mac: `screen /dev/tty.ubserial(...) 115200` (fill in the serial number)
-* windows: install [Putty](https://www.chiark.greenend.org.uk/~sgtatham/putty/) and connect with connection type "Serial" to serial line COM(...) and speed: 115200 (fill in comport number)
-
-login is `we` and password is `sleep`
-
-disconnect from `screen` (crtl-a-z)
-
-## hotspot connect
-
-connect to norns' wifi hotspot: SSID=norns PSK=nnnnnnnn
-
-`ssh we@norns.local` (provided avahi is working) `ssh we@172.24.1.1` (if avahi is not working)
-
-## switch norns wifi connection to external wifi network
-* (`wifi.sh` is in the norns repo)
-* `wifi.sh scan`
-* `wifi.sh select "My Wifi SSID" "wifi-password"`
-* `wifi-router.sh` (helper script to reconfigure network whilst ssh-ed in)
-* `wifi-hotspot.sh` (switches back to hotspot mode whilst ssh-ed in)
+* SYSTEM > WIFI > ADD joins a network (pick it, enter the password); CONNECT
+  rejoins a saved one. Over ssh, `nmcli device wifi connect "My Wifi SSID"
+  password "wifi-password"` does the same.
+* SYSTEM > WIFI > HOTSPOT starts the norns hotspot (SSID `norns`, password
+  `nnnnnnnn`); it does not start by itself. Over the hotspot the norns is
+  `10.42.0.1`: `ssh we@10.42.0.1`.
