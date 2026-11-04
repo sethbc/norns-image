@@ -172,8 +172,8 @@ norns_git() {
   grep -qx 'After=multi-user.target' "$ROOTFS/etc/systemd/system/norns-bootlog.service"
   grep -qx 'OnBootSec=90s' "$ROOTFS/etc/systemd/system/norns-bootlog.timer"
   grep -qx 'dir=/boot/firmware' "$ROOTFS/usr/local/sbin/norns-bootlog"
-  # /boot/firmware is the FAT partition in the image's fstab
-  in_root awk '$2 == "/boot/firmware" && $3 == "vfat" { ok = 1 } END { exit !ok }' /etc/fstab
+  # (/boot/firmware is the FAT partition: rpi-image-gen writes that fstab line
+  # into the disk image, not the filesystem tested here)
   # the commands it runs are in the image
   for c in systemctl journalctl ip ss aplay lsmod df timeout sed head mktemp; do
     in_root sh -c "command -v $c" >/dev/null || { echo "$c"; return 1; }
