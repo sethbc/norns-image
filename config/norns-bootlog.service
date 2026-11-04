@@ -1,0 +1,15 @@
+[Unit]
+Description=Write boot diagnostics to /boot/firmware/norns-boot.log
+# Once the boot is done, and again from norns-bootlog.timer when the norns
+# services have had time to start (or fail).
+After=multi-user.target
+RequiresMountsFor=/boot/firmware
+
+[Service]
+Type=oneshot
+# never fails the boot: the script always exits 0, and "-" ignores anything else
+ExecStart=-/usr/local/sbin/norns-bootlog
+TimeoutStartSec=5min
+
+[Install]
+WantedBy=multi-user.target

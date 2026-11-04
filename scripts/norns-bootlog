@@ -1,0 +1,80 @@
+#!/bin/bash
+# Write a diagnostics dump of this boot to the FAT boot partition, where it
+# can be read by putting the SD card in any computer (no screen or network
+# needed): /boot/firmware/norns-boot.log. The previous boot's dump is kept as
+# norns-boot.prev.log.
+#
+# usage: norns-bootlog [--dir DIR] [--state FILE]
+#   --dir    where the logs go (default /boot/firmware)
+#   --state  marker that this boot's first run has rotated the logs (default
+#            /run/norns-bootlog.rotated; /run is empty on every boot). Later
+#            runs in the same boot overwrite norns-boot.log only, so
+#            norns-boot.prev.log stays the previous boot's.
+#
+# The dump is capped at NORNS_BOOTLOG_MAX bytes (default 1048576). Every
+# command is best effort and time-limited; the script always exits 0, so it
+# can never fail the boot.
+set -uo pipefail
+
+dir=/boot/firmware
+state=/run/norns-bootlog.rotated
+max=${NORNS_BOOTLOG_MAX:-1048576}
+
+while [ $# -gt 0 ]; do
+  case $1 in
+    --dir)   dir=${2:?--dir needs a directory}; shift 2 ;;
+    --state) state=${2:?--state needs a path}; shift 2 ;;
+    *) echo "usage: ${0##*/} [--dir DIR] [--state FILE]" >&2; exit 0 ;;
+  esac
+done
+
+log=$dir/norns-boot.log
+prev=$dir/norns-boot.prev.log
+
+UNITS="ssh ssh-hostkeys-generate norns-grow-root norns-codec-detect
+  norns-update-guard norns-jack norns-crone norns-sclang norns-matron
+  norns-maiden"
+
+# section TITLE COMMAND: a header, then the command's output and status
+section() {
+  local title=$1; shift
+  printf '\n===== %s\n' "$title"
+  timeout 30 sh -c "$*" 2>&1
+  printf -- '----- (exit %s)\n' "$?"
+}
+
+dump() {
+  printf 'norns boot log, written %s\n' "$(date -Is 2>/dev/null || date)"
+  section 'uname -a' 'uname -a'
+  section 'uptime' 'uptime'
+  section 'systemctl --failed' 'systemctl --failed --no-pager'
+  # shellcheck disable=SC2086
+  section 'systemctl status (norns, ssh, first-boot units)' \
+    "systemctl status --no-pager -l -n 15 $(echo $UNITS)"
+  section 'journalctl -b -p warning (last 200)' \
+    'journalctl -b --no-pager -p warning | tail -n 200'
+  section 'journalctl -b -1 codec-detect, grow-root (last 50)' \
+    'journalctl -b -1 --no-pager -u norns-codec-detect -u norns-grow-root | tail -n 50'
+  section 'ip -brief addr' 'ip -brief addr'
+  section 'ss -tlnp' 'ss -tlnp'
+  section 'device nodes' 'ls -l /dev/spidev* /dev/gpiochip* /dev/i2c-*'
+  section 'aplay -l' 'aplay -l'
+  section 'lsmod (snd, i2c, spi)' "lsmod | grep -E 'snd|i2c|spi'"
+  section 'df -h /' 'df -h /'
+  section "config.txt from # BEGIN norns-codec" \
+    "sed -n '/^# BEGIN norns-codec\$/,\$p' '$dir/config.txt'"
+}
+
+[ -d "$dir" ] || { echo "norns-bootlog: no $dir" >&2; exit 0; }
+tmp=$(mktemp "$dir/.norns-boot.log.XXXXXX") || exit 0
+trap 'rm -f -- "$tmp"' EXIT
+
+dump | head -c "$max" > "$tmp"
+
+if [ ! -e "$state" ]; then
+  [ -e "$log" ] && mv -f -- "$log" "$prev"
+  : > "$state" 2>/dev/null
+fi
+mv -f -- "$tmp" "$log" && trap - EXIT
+sync
+exit 0

@@ -1,6 +1,7 @@
 #!/bin/bash
 # Build monome's norns from its release tag, unchanged, into /home/we/norns,
-# and install what runs it: SC classes, systemd units, groups, update guard.
+# and install what runs it: SC classes, systemd units, groups, update guard,
+# boot diagnostics.
 # usage: build-norns.sh <rootfs> <repo-dir> <tag> <commit> <version-txt> \
 #                       <waf-url> <waf-sha256>
 #
@@ -126,8 +127,13 @@ chroot "$root" setpriv --reuid=we --regid=we --init-groups \
 # every boot by norns-update-guard.service.
 chroot "$root" install -d -m 0755 -o root -g root /home/we/update
 
+# Boot diagnostics on the FAT boot partition (norns-bootlog.service, and its
+# timer for a second look once the norns services have settled).
+install -D -m 0755 "$repo/scripts/norns-bootlog" "$root/usr/local/sbin/norns-bootlog"
+
 # systemd units (maiden's binary comes from a later layer)
-for f in "$repo"/config/norns-*.service "$repo"/config/norns-*.socket "$repo"/config/norns.target; do
+for f in "$repo"/config/norns-*.service "$repo"/config/norns-*.socket "$repo"/config/norns-*.timer "$repo"/config/norns.target; do
   install -m 0644 "$f" "$root/etc/systemd/system/${f##*/}"
 done
-chroot "$root" systemctl enable norns.target norns-update-guard.service
+chroot "$root" systemctl enable norns.target norns-update-guard.service \
+  norns-bootlog.service norns-bootlog.timer

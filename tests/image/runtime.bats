@@ -88,7 +88,7 @@ norns_git() {
   done
 }
 @test "norns units installed from config/" {
-  for f in "$REPO_ROOT"/config/norns-*.service "$REPO_ROOT"/config/norns-*.socket "$REPO_ROOT"/config/norns.target; do
+  for f in "$REPO_ROOT"/config/norns-*.service "$REPO_ROOT"/config/norns-*.socket "$REPO_ROOT"/config/norns-*.timer "$REPO_ROOT"/config/norns.target; do
     cmp "$f" "$ROOTFS/etc/systemd/system/${f##*/}" || return 1
   done
 }
@@ -149,6 +149,25 @@ norns_git() {
   mkdir -p "$d/sndrpimonome"
   run timeout 5 sh -c "${wait//\/proc\/asound/$d}"
   [ "$status" -eq 0 ]
+}
+# With no screen and no network, the boot partition is the only way in: the
+# dump is readable by putting the card in any computer.
+@test "boot diagnostics are written to the boot partition every boot" {
+  cmp "$REPO_ROOT/scripts/norns-bootlog" "$ROOTFS/usr/local/sbin/norns-bootlog"
+  in_root test -x /usr/local/sbin/norns-bootlog
+  [ "$(in_root systemctl is-enabled norns-bootlog.service)" = enabled ]
+  [ "$(in_root systemctl is-enabled norns-bootlog.timer)" = enabled ]
+  u=$ROOTFS/etc/systemd/system/norns-bootlog.service
+  grep -qx 'ExecStart=-/usr/local/sbin/norns-bootlog' "$u"
+  grep -qx 'RequiresMountsFor=/boot/firmware' "$u"
+  grep -qx 'OnBootSec=90s' "$ROOTFS/etc/systemd/system/norns-bootlog.timer"
+  grep -qx 'dir=/boot/firmware' "$ROOTFS/usr/local/sbin/norns-bootlog"
+  # /boot/firmware is the FAT partition in the image's fstab
+  in_root awk '$2 == "/boot/firmware" && $3 == "vfat" { ok = 1 } END { exit !ok }' /etc/fstab
+  # the commands it runs are in the image
+  for c in systemctl journalctl ip ss aplay lsmod df timeout sed head mktemp; do
+    in_root sh -c "command -v $c" >/dev/null || { echo "$c"; return 1; }
+  done
 }
 # SYSTEM > UPDATE: ~/version.txt makes stable report "up to date"; for a
 # beta (K1-alt) install the download into ~/update fails, as that is a

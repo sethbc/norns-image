@@ -12,6 +12,17 @@ Flash the `.img.zst` with Raspberry Pi Imager (Use custom) or `zstdcat ... | sud
 (see the README), using a card larger than the image so the grow step has work
 to do.
 
+## If something doesn't work
+
+Every boot writes a diagnostics dump to the boot partition, so it can be read
+without a screen or network: power off, put the SD card in your computer,
+open the boot volume (`bootfs`) and read `norns-boot.log` (the previous
+boot's is `norns-boot.prev.log`). It is written once the boot is done and
+again 90 s after boot, and holds failed units, the norns, ssh and first-boot
+units' status, this boot's warnings, the network addresses and listening
+ports, the device nodes, the sound cards and the codec block of
+`config.txt`. Attach it to any failure report.
+
 ## A. Pi 4 + shieldXL (the target)
 
 ### A1. First boot

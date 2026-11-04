@@ -1,0 +1,8 @@
+[Unit]
+Description=Write boot diagnostics again 90 s after boot
+
+[Timer]
+OnBootSec=90s
+
+[Install]
+WantedBy=timers.target
