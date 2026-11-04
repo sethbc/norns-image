@@ -2,6 +2,8 @@
 Description=Detect the norns shield codec (CS4270 or CS4271) and select its overlays
 DefaultDependencies=yes
 After=systemd-modules-load.service systemd-udev-trigger.service
+# The reboot after a rewrite must not interrupt the other first-boot jobs.
+After=norns-grow-root.service ssh-hostkeys-generate.service
 Before=norns-jack.service
 
 [Service]
